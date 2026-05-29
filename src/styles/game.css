@@ -1,0 +1,38 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: #0d0e0f;
+  color: #c9b99a;
+  font-family: 'Crimson Text', Georgia, serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: opacity 0.15s, border-color 0.15s, color 0.15s;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+img {
+  display: block;
+}
+
+/* Scrollbar (optional polish) */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0d0e0f; }
+::-webkit-scrollbar-thumb { background: #2a2218; border-radius: 3px; }
