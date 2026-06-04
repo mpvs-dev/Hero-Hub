@@ -100,16 +100,75 @@ function UnitRow({ unit, isSelected, isAttackable, onClick, compact }) {
   );
 }
 
+// ─── Indicador de movimientos restantes ───────────────────────────────────────
+function MovementPips({ unit }) {
+  const total = unit.movesPerTurn ?? 1;
+  if (total <= 1) return null; // no mostrar para unidades normales
+
+  const used = unit.movesUsed ?? 0;
+  const remaining = total - used;
+
+  return (
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 5,
+      padding: "4px 8px",
+      background: "#0d100a",
+      border: "1px solid #2a3018",
+      borderRadius: 3,
+    }}>
+      <span style={{ fontSize: 9, color: "#5a6a3a", fontFamily: "Cinzel, serif", letterSpacing: 1 }}>
+        MOVIMIENTOS
+      </span>
+      <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+        {Array.from({ length: total }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              background: i < remaining ? "#7acc5a" : "#1e2218",
+              border: `1px solid ${i < remaining ? "#4a8a2a" : "#2a2a18"}`,
+              transition: "background 0.2s",
+            }}
+          />
+        ))}
+      </div>
+      <span style={{
+        fontSize: 10,
+        color: remaining > 0 ? "#7acc5a" : "#3a3a28",
+        fontFamily: "Cinzel, serif",
+        marginLeft: 4,
+      }}>
+        {remaining}/{total}
+      </span>
+    </div>
+  );
+}
+
 // ─── Hint de fase ─────────────────────────────────────────────────────────────
-function PhaseHint({ phase, attackableCount }) {
-  if (phase === "move") {
+function PhaseHint({ phase, attackableCount, unit }) {
+  const movesLeft = unit ? (unit.movesPerTurn ?? 1) - (unit.movesUsed ?? 0) : 0;
+  const canStillMove = movesLeft > 0;
+  const canStillAttack = unit ? !unit.attacked : false;
+
+  if (phase === "move" && canStillAttack) {
     return <div style={hintStyle("#1a1208", "#2a1a08", "#c9a84c")}>
       Elige una casilla dorada para mover o haz clic en un enemigo para atacar
+    </div>;
+  }
+  if (phase === "move" && !canStillAttack) {
+    return <div style={hintStyle("#0d1208", "#1a2018", "#7acc5a")}>
+      Ya atacaste — elige una casilla para reposicionarte
     </div>;
   }
   if (phase === "attack" && attackableCount > 0) {
     return <div style={hintStyle("#1a0808", "#2a0808", "#e24b4a")}>
       Haz clic en un enemigo marcado para atacar
+      {canStillMove && <span style={{ color: "#7acc5a" }}> · Podrás mover después</span>}
     </div>;
   }
   if (phase === "attack" && attackableCount === 0) {
@@ -199,13 +258,11 @@ export default function Sidebar({ isMobile = false }) {
     selectUnit, attackUnit, endPlayerTurn, startBattle, inspectEnemy,
   } = useGameStore();
 
-  const selUnit      = units.find(u => u.id === selectedUnitId);
-  const inspEnemy    = units.find(u => u.id === inspectedEnemyId);
-  const players      = units.filter(u => u.team === "player");
-  const enemies      = units.filter(u => u.team === "enemy");
-
-  // En mobile mostramos listas en fila cuando hay poco espacio
-  const compact = isMobile;
+  const selUnit   = units.find(u => u.id === selectedUnitId);
+  const inspEnemy = units.find(u => u.id === inspectedEnemyId);
+  const players   = units.filter(u => u.team === "player");
+  const enemies   = units.filter(u => u.team === "enemy");
+  const compact   = isMobile;
 
   // ── Fase despliegue ──────────────────────────────────────────────────────
   if (phase === "deploy") {
@@ -251,17 +308,10 @@ export default function Sidebar({ isMobile = false }) {
             <div style={{ display: "flex", justifyContent: "center", flexShrink: 0 }}>
               <Sprite type={inspEnemy.type} size={compact ? 44 : 56} />
             </div>
-
             <div style={{ flex: 1 }}>
-              {/* Clase */}
-              <div style={{
-                fontSize: 9, color: "#6a2020",
-                fontStyle: "italic", marginBottom: 4,
-              }}>
+              <div style={{ fontSize: 9, color: "#6a2020", fontStyle: "italic", marginBottom: 4 }}>
                 {inspEnemy.class}
               </div>
-
-              {/* HP con barra */}
               <div style={{ marginBottom: 6 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
                   <span style={{ fontSize: 10, color: "#5a4a2a" }}>❤ Vida</span>
@@ -280,8 +330,6 @@ export default function Sidebar({ isMobile = false }) {
                   }} />
                 </div>
               </div>
-
-              {/* Stats */}
               <div style={{
                 display: "grid",
                 gridTemplateColumns: compact ? "1fr 1fr" : "1fr",
@@ -296,23 +344,17 @@ export default function Sidebar({ isMobile = false }) {
             </div>
           </div>
 
-          {/* Descripción */}
           <div style={{
-            fontSize: 9, color: "#4a3028", lineHeight: 1.5,
-            fontStyle: "italic", marginBottom: 8,
-            padding: "5px 7px",
+            fontSize: 9, color: "#4a3028", lineHeight: 1.5, fontStyle: "italic",
+            marginBottom: 8, padding: "5px 7px",
             background: "#160808", border: "1px solid #2a1010", borderRadius: 3,
           }}>
             {inspEnemy.description}
           </div>
 
-          {/* Habilidades */}
           {inspEnemy.abilities?.length > 0 && (
             <div style={{ marginBottom: 6 }}>
-              <div style={{
-                fontSize: 8, fontFamily: "Cinzel, serif",
-                letterSpacing: 2, color: "#3a2020", marginBottom: 5,
-              }}>
+              <div style={{ fontSize: 8, fontFamily: "Cinzel, serif", letterSpacing: 2, color: "#3a2020", marginBottom: 5 }}>
                 HABILIDADES
               </div>
               {inspEnemy.abilities.map(ab => {
@@ -326,10 +368,7 @@ export default function Sidebar({ isMobile = false }) {
                   }}>
                     <span style={{ fontSize: 14, flexShrink: 0 }}>{cfg.icon}</span>
                     <div>
-                      <div style={{
-                        fontSize: 9, fontFamily: "Cinzel, serif",
-                        letterSpacing: 1, color: cfg.color, marginBottom: 1,
-                      }}>
+                      <div style={{ fontSize: 9, fontFamily: "Cinzel, serif", letterSpacing: 1, color: cfg.color, marginBottom: 1 }}>
                         {cfg.label}
                         <span style={{ color: "#3a3028", marginLeft: 6, fontSize: 8 }}>
                           {Math.round(ab.chance * 100)}%
@@ -345,13 +384,9 @@ export default function Sidebar({ isMobile = false }) {
             </div>
           )}
 
-          {/* Efectos activos */}
           {inspEnemy.statusEffects?.length > 0 && (
             <div>
-              <div style={{
-                fontSize: 8, fontFamily: "Cinzel, serif",
-                letterSpacing: 2, color: "#3a2020", marginBottom: 5,
-              }}>
+              <div style={{ fontSize: 8, fontFamily: "Cinzel, serif", letterSpacing: 2, color: "#3a2020", marginBottom: 5 }}>
                 ESTADO ACTUAL
               </div>
               {inspEnemy.statusEffects.map(effect => {
@@ -380,7 +415,6 @@ export default function Sidebar({ isMobile = false }) {
       {/* Héroe seleccionado */}
       {selUnit && (
         <Panel title={selUnit.name.toUpperCase()}>
-          {/* En mobile: sprite + stats en fila */}
           <div style={{
             display: "flex",
             flexDirection: compact ? "row" : "column",
@@ -391,9 +425,7 @@ export default function Sidebar({ isMobile = false }) {
             <div style={{ display: "flex", justifyContent: "center", flexShrink: 0 }}>
               <Sprite type={selUnit.type} size={compact ? 44 : 56} />
             </div>
-
             <div style={{ flex: 1 }}>
-              {/* Stats en grid 2 col en mobile, lista en desktop */}
               <div style={{
                 display: "grid",
                 gridTemplateColumns: compact ? "1fr 1fr" : "1fr",
@@ -410,29 +442,24 @@ export default function Sidebar({ isMobile = false }) {
             </div>
           </div>
 
+          {/* Indicador de movimientos — solo visible si tiene más de 1 */}
+          <MovementPips unit={selUnit} />
+
           {/* Efectos de estado activos */}
           {(selUnit.statusEffects?.length > 0) && (
-            <div style={{ marginBottom: 6 }}>
+            <div style={{ marginBottom: 6, marginTop: 6 }}>
               {selUnit.statusEffects.map(effect => {
                 const cfg = STATUS_EFFECTS[effect.type];
                 if (!cfg) return null;
                 return (
                   <div key={effect.type} style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "4px 8px",
-                    marginBottom: 4,
-                    borderRadius: 3,
-                    background: cfg.bgColor,
-                    border: `1px solid ${cfg.border}`,
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "4px 8px", marginBottom: 4, borderRadius: 3,
+                    background: cfg.bgColor, border: `1px solid ${cfg.border}`,
                   }}>
                     <span style={{ fontSize: 13 }}>{cfg.icon}</span>
                     <div style={{ flex: 1 }}>
-                      <div style={{
-                        fontSize: 10, fontFamily: "Cinzel, serif",
-                        letterSpacing: 1, color: cfg.color,
-                      }}>
+                      <div style={{ fontSize: 10, fontFamily: "Cinzel, serif", letterSpacing: 1, color: cfg.color }}>
                         {cfg.label}
                       </div>
                       <div style={{ fontSize: 9, color: "#5a4a2a" }}>
@@ -445,9 +472,9 @@ export default function Sidebar({ isMobile = false }) {
             </div>
           )}
 
-          <PhaseHint phase={phase} attackableCount={attackableUnitIds.length} />
+          <PhaseHint phase={phase} attackableCount={attackableUnitIds.length} unit={selUnit} />
 
-          {/* Habilidad pasiva activa */}
+          {/* Habilidad pasiva */}
           {selUnit.abilityKey && (() => {
             const ab = ABILITIES[selUnit.abilityKey];
             if (!ab || ab.type !== "passive") return null;
@@ -455,20 +482,14 @@ export default function Sidebar({ isMobile = false }) {
               <div style={{
                 display: "flex", alignItems: "center", gap: 7,
                 marginTop: 7, padding: "5px 8px", borderRadius: 3,
-                background: "#0d0e0a",
-                border: `1px solid ${ab.color}44`,
+                background: "#0d0e0a", border: `1px solid ${ab.color}44`,
               }}>
                 <span style={{ fontSize: 14 }}>{ab.icon}</span>
                 <div>
-                  <div style={{
-                    fontSize: 9, fontFamily: "Cinzel, serif",
-                    letterSpacing: 1, color: ab.color,
-                  }}>
+                  <div style={{ fontSize: 9, fontFamily: "Cinzel, serif", letterSpacing: 1, color: ab.color }}>
                     {ab.name} <span style={{ color: "#2a2820", fontSize: 8 }}>· PASIVA</span>
                   </div>
-                  <div style={{ fontSize: 8, color: "#3a3028" }}>
-                    {ab.description}
-                  </div>
+                  <div style={{ fontSize: 8, color: "#3a3028" }}>{ab.description}</div>
                 </div>
               </div>
             );
@@ -476,7 +497,7 @@ export default function Sidebar({ isMobile = false }) {
         </Panel>
       )}
 
-      {/* En mobile: héroes y enemigos en fila side-by-side */}
+      {/* Listas de unidades */}
       {compact ? (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <Panel title="HÉROES">

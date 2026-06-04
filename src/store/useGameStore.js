@@ -3,6 +3,7 @@ import { MAPS }      from "../config/maps";
 import { HEROES }    from "../config/heroes";
 import { ENEMIES }   from "../config/enemies";
 import { ABILITIES } from "../config/abilities";
+import { TILE_TYPES } from "../config/tiles";
 import {
   createUnitsFromMap,
   getMovableTiles,
@@ -14,23 +15,116 @@ import {
 
 const LOG_MAX = 10;
 
-// Héroes jugables — importados directamente desde heroes.js
 export const PLAYER_HEROES = Object.values(HEROES);
+
+// ─── Helper: ¿puede esta unidad moverse todavía? ─────────────────────────────
+function canMove(unit) {
+  return (unit.movesUsed ?? 0) < (unit.movesPerTurn ?? 1);
+}
+
+// ─── Helper: ¿puede atacar todavía? ─────────────────────────────────────────
+function canAttack(unit) {
+  return !unit.attacked;
+}
+
+// ─── Helper: ¿ha agotado todas sus acciones? ────────────────────────────────
+function isDone(unit) {
+  return !canMove(unit) && !canAttack(unit);
+}
+
+// ─── Helper: aplica efectos de estado a una unidad ──────────────────────────
+function tickStatusEffects(u) {
+  if (!u.alive) return { unit: u, logs: [] };
+  const logs = [];
+  let hp = u.hp;
+  const nextEffects = [];
+
+  for (const effect of (u.statusEffects ?? [])) {
+    hp = Math.max(0, hp - effect.damage);
+    const label =
+      effect.type === "poison"  ? "veneno" :
+      effect.type === "burn"    ? "quemadura" : "hemorragia";
+    logs.push(`${u.name} sufre ${effect.damage} de daño por ${label} ☠`);
+    if (effect.duration - 1 > 0) {
+      nextEffects.push({ ...effect, duration: effect.duration - 1 });
+    }
+  }
+
+  const died = hp <= 0;
+  if (died && u.statusEffects?.length > 0) {
+    logs.push(`${u.name} ha sucumbido a sus heridas. ¡Caído!`);
+  }
+
+  return { unit: { ...u, hp, alive: !died, statusEffects: nextEffects }, logs };
+}
+
+// ─── Helper: aplica daño de tile de lava ────────────────────────────────────
+function tickTileEffects(u, mapGrid) {
+  if (!u.alive || u.row < 0) return { unit: u, logs: [] };
+  const tileKey = mapGrid[u.row]?.[u.col];
+  const tile = TILE_TYPES[tileKey];
+  if (!tile?.effect || tile.effect.type !== "damage") return { unit: u, logs: [] };
+
+  const dmg  = tile.effect.amount;
+  const hp   = Math.max(0, u.hp - dmg);
+  const died = hp <= 0;
+  const logs = [`${u.name} recibe ${dmg} de daño por la lava 🔥`];
+  if (died) logs.push(`${u.name} ha sido consumido por la lava. ¡Caído!`);
+
+  return { unit: { ...u, hp, alive: !died }, logs };
+}
+
+// ─── Helper: recalcula el estado de selección tras una acción ────────────────
+// Devuelve el patch de estado a aplicar con set()
+function computeSelectionState(unit, units, map) {
+  const liveEnemies = units.filter(u => u.team === "enemy" && u.alive);
+
+  const stillCanMove   = canMove(unit);
+  const stillCanAttack = canAttack(unit);
+
+  if (!stillCanMove && !stillCanAttack) {
+    // Agotó todo — deseleccionar
+    return {
+      selectedUnitId: null,
+      inspectedEnemyId: null,
+      movableTiles: [],
+      attackableUnitIds: [],
+      phase: "select",
+    };
+  }
+
+  if (stillCanMove && !stillCanAttack) {
+    // Solo puede moverse (ya atacó)
+    const movable = getMovableTiles(unit, units, map.grid, map.w, map.h);
+    return { movableTiles: movable, attackableUnitIds: [], phase: "move" };
+  }
+
+  if (!stillCanMove && stillCanAttack) {
+    // Solo puede atacar (agotó movimientos)
+    const atkIds = getAttackableUnits(unit, liveEnemies).map(e => e.id);
+    return { movableTiles: [], attackableUnitIds: atkIds, phase: "attack" };
+  }
+
+  // Puede ambas cosas — mostrar movimiento + atacables simultáneamente
+  const movable = getMovableTiles(unit, units, map.grid, map.w, map.h);
+  const atkIds  = getAttackableUnits(unit, liveEnemies).map(e => e.id);
+  return { movableTiles: movable, attackableUnitIds: atkIds, phase: "move" };
+}
 
 const useGameStore = create((set, get) => ({
   // ── Pantalla activa
-  screen: "lobby", // 'lobby' | 'abilitySelect' | 'mapSelect' | 'game'
+  screen: "lobby",
 
   // ── Lobby
   roster: [null, null, null],
   activeSlot: null,
-  chosenAbilities: [null, null, null], // habilidad elegida por ranura
+  chosenAbilities: [null, null, null],
 
   // ── Game
   currentMapKey: null,
   units: [],
   selectedUnitId: null,
-  inspectedEnemyId: null,   // enemigo inspeccionado en sidebar
+  inspectedEnemyId: null,
   movableTiles: [],
   attackableUnitIds: [],
   phase: "select",
@@ -60,7 +154,6 @@ const useGameStore = create((set, get) => ({
       phase: "select",
     }),
 
-  /** Selecciona un enemigo para inspeccionar en el sidebar */
   inspectEnemy: (unitId) =>
     set({
       inspectedEnemyId: unitId,
@@ -70,11 +163,10 @@ const useGameStore = create((set, get) => ({
       phase: "select",
     }),
 
-  selectSlot: (slotIndex) => {
+  selectSlot: (slotIndex) =>
     set((state) => ({
       activeSlot: state.activeSlot === slotIndex ? null : slotIndex,
-    }));
-  },
+    })),
 
   assignHero: (heroKey) => {
     const { roster, activeSlot } = get();
@@ -82,21 +174,16 @@ const useGameStore = create((set, get) => ({
     const existingSlot = roster.findIndex((k) => k === heroKey);
     if (existingSlot !== -1 && existingSlot !== activeSlot) return;
     const newRoster = [...roster];
-    if (newRoster[activeSlot] === heroKey) {
-      newRoster[activeSlot] = null;
-    } else {
-      newRoster[activeSlot] = heroKey;
-    }
+    newRoster[activeSlot] = newRoster[activeSlot] === heroKey ? null : heroKey;
     set({ roster: newRoster, activeSlot: null });
   },
 
-  clearSlot: (slotIndex) => {
+  clearSlot: (slotIndex) =>
     set((state) => {
       const newRoster = [...state.roster];
       newRoster[slotIndex] = null;
       return { roster: newRoster, activeSlot: null };
-    });
-  },
+    }),
 
   goToMapSelect: () => {
     const { roster } = get();
@@ -106,16 +193,13 @@ const useGameStore = create((set, get) => ({
 
   backToLobby: () => set({ screen: "lobby" }),
 
-  /** Asigna una habilidad a un slot del roster */
-  setHeroAbility: (slotIndex, abilityKey) => {
+  setHeroAbility: (slotIndex, abilityKey) =>
     set(state => {
       const next = [...state.chosenAbilities];
       next[slotIndex] = next[slotIndex] === abilityKey ? null : abilityKey;
       return { chosenAbilities: next };
-    });
-  },
+    }),
 
-  /** Confirma habilidades y va a selección de mapa */
   confirmAbilities: () => {
     const { chosenAbilities, roster } = get();
     if (roster.some((_, i) => chosenAbilities[i] === null)) return;
@@ -133,16 +217,30 @@ const useGameStore = create((set, get) => ({
       col: map.playerSpawns[i]?.col ?? 0,
     }));
     const mapWithRoster = { ...map, playerSpawns: customSpawns };
-    const allUnits = createUnitsFromMap(mapWithRoster).map((u, idx) =>
-      u.team === "player"
-        ? {
-            ...u, row: -1, col: -1, deployed: false,
-            abilityKey: chosenAbilities[idx] ?? null,
-            abilityCooldown: 0,
-            statusEffects: [],
-          }
-        : { ...u, deployed: true, statusEffects: [] }
-    );
+
+    const rawUnits = createUnitsFromMap(mapWithRoster);
+    const playerUnits = rawUnits.filter(u => u.team === "player");
+    const enemyUnits  = rawUnits.filter(u => u.team === "enemy");
+
+    const allUnits = [
+      ...playerUnits.map((u, idx) => ({
+        ...u,
+        row: -1, col: -1, deployed: false,
+        abilityKey: chosenAbilities[idx] ?? null,
+        abilityCooldown: 0,
+        statusEffects: [],
+        // movesPerTurn viene del HEROES definition a través de createUnitsFromMap
+        movesUsed: 0,
+      })),
+      ...enemyUnits.map(u => ({
+        ...u,
+        deployed: true,
+        statusEffects: [],
+        movesPerTurn: 1,
+        movesUsed: 0,
+      })),
+    ];
+
     const deployQueue = customSpawns.map((s) => s.type);
     set({
       screen: "game",
@@ -202,6 +300,7 @@ const useGameStore = create((set, get) => ({
       (u) => u.team === "player" && !u.deployed && u.type === deployPending
     );
     if (!targetUnit) return;
+
     const newUnits = units.map((u) =>
       u.id === targetUnit.id ? { ...u, row, col, deployed: true } : u
     );
@@ -225,56 +324,55 @@ const useGameStore = create((set, get) => ({
   // ── TURNO DEL JUGADOR ──────────────────────────────────────
 
   selectUnit: (unitId) => {
-    const { units, turn, gameOver, currentMapKey, _log, _deselect } = get();
+    const { units, turn, gameOver, currentMapKey, _log } = get();
     if (turn !== "player" || gameOver) return;
+
     const unit = units.find((u) => u.id === unitId);
     if (!unit || !unit.alive || unit.team !== "player") return;
-    if (unit.moved && unit.attacked) {
+
+    if (isDone(unit)) {
       _log(`${unit.name} ya actuó este turno.`);
       return;
     }
+
     const map = MAPS[currentMapKey];
-    const liveEnemies = units.filter((u) => u.team === "enemy" && u.alive);
-    set({ selectedUnitId: unitId, inspectedEnemyId: null });
-    if (!unit.moved) {
-      const movable = getMovableTiles(unit, units, map.grid, map.w, map.h);
-      const atkIds = !unit.attacked
-        ? getAttackableUnits(unit, liveEnemies).map((e) => e.id)
-        : [];
-      set({ movableTiles: movable, attackableUnitIds: atkIds, phase: "move" });
-    } else {
-      const atkIds = getAttackableUnits(unit, liveEnemies).map((e) => e.id);
-      set({ movableTiles: [], attackableUnitIds: atkIds, phase: "attack" });
-    }
+    const selectionPatch = computeSelectionState(unit, units, map);
+    set({ selectedUnitId: unitId, inspectedEnemyId: null, ...selectionPatch });
   },
 
   moveUnit: (unitId, row, col) => {
-    const { units, _log, _deselect } = get();
+    const { units, currentMapKey, _log } = get();
     const unit = units.find((u) => u.id === unitId);
-    if (!unit) return;
+    if (!unit || !canMove(unit)) return;
+
+    const newMovesUsed = (unit.movesUsed ?? 0) + 1;
     const newUnits = units.map((u) =>
-      u.id === unitId ? { ...u, row, col, moved: true } : u
+      u.id === unitId ? { ...u, row, col, movesUsed: newMovesUsed } : u
     );
-    const movedUnit = { ...unit, row, col };
-    const liveEnemies = newUnits.filter((u) => u.team === "enemy" && u.alive);
-    const atkIds = !unit.attacked
-      ? getAttackableUnits(movedUnit, liveEnemies).map((e) => e.id)
-      : [];
+
     set({ units: newUnits });
-    if (atkIds.length > 0) {
-      set({ movableTiles: [], attackableUnitIds: atkIds, phase: "attack" });
-      _log(`${unit.name} avanza. ¡Selecciona un objetivo!`);
+
+    const updatedUnit = { ...unit, row, col, movesUsed: newMovesUsed };
+    const map = MAPS[currentMapKey];
+    const selectionPatch = computeSelectionState(updatedUnit, newUnits, map);
+
+    const movesLeft = (updatedUnit.movesPerTurn ?? 1) - newMovesUsed;
+    if (movesLeft > 0 && !canAttack(updatedUnit)) {
+      _log(`${unit.name} se mueve. (${movesLeft} movimiento${movesLeft > 1 ? "s" : ""} restante${movesLeft > 1 ? "s" : ""})`);
+    } else if (movesLeft > 0) {
+      _log(`${unit.name} avanza.`);
     } else {
-      _deselect();
       _log(`${unit.name} se mueve.`);
     }
+
+    set(selectionPatch);
   },
 
   attackUnit: (attackerId, targetId) => {
-    const { units, _log, _deselect } = get();
+    const { units, currentMapKey, _log } = get();
     const attacker = units.find((u) => u.id === attackerId);
     const target   = units.find((u) => u.id === targetId);
-    if (!attacker || !target || attacker.attacked) return;
+    if (!attacker || !target || !canAttack(attacker)) return;
 
     const dmg   = calculateDamage(attacker, target);
     const newHp = Math.max(0, target.hp - dmg);
@@ -295,7 +393,9 @@ const useGameStore = create((set, get) => ({
             );
           } else {
             newTargetEffects.push({
-              type: ab.effect.statusType, duration: ab.effect.duration, damage: ab.effect.damage,
+              type: ab.effect.statusType,
+              duration: ab.effect.duration,
+              damage: ab.effect.damage,
             });
             const icons = { poison: "☠ Envenenado", burn: "🔥 Quemado", bleed: "🩸 Sangrando" };
             logMsg += ` · ${icons[ab.effect.statusType] ?? ab.effect.statusType}`;
@@ -313,16 +413,49 @@ const useGameStore = create((set, get) => ({
     });
 
     set({ units: newUnits });
-    _deselect();
+
+    const updatedAttacker = { ...attacker, attacked: true };
+    const map = MAPS[currentMapKey];
+    const selectionPatch = computeSelectionState(updatedAttacker, newUnits, map);
+
+    // Si puede moverse todavía, avisar
+    if (canMove(updatedAttacker)) {
+      const movesLeft = (updatedAttacker.movesPerTurn ?? 1) - (updatedAttacker.movesUsed ?? 0);
+      _log(`${attacker.name} aún puede moverse (${movesLeft} movimiento${movesLeft > 1 ? "s" : ""}).`);
+    }
+
+    set(selectionPatch);
+
     const result = checkGameOver(newUnits);
-    if (result) set({ gameOver: result });
+    if (result) set({ gameOver: result, ...{ selectedUnitId: null, movableTiles: [], attackableUnitIds: [], phase: "select" } });
   },
 
   endPlayerTurn: () => {
-    const { turn, enemyBusy, gameOver, _deselect, _log } = get();
+    const { turn, enemyBusy, gameOver, units, currentMapKey, _deselect, _log } = get();
     if (turn !== "player" || enemyBusy || gameOver) return;
+
+    // Aplicar daño de lava a héroes al terminar el turno
+    const map = MAPS[currentMapKey];
+    let processedUnits = [...units];
+    const lavaMsgs = [];
+
+    processedUnits = processedUnits.map(u => {
+      if (u.team !== "player" || !u.alive) return u;
+      const { unit: afterTile, logs } = tickTileEffects(u, map.grid);
+      lavaMsgs.push(...logs);
+      return afterTile;
+    });
+
+    lavaMsgs.forEach(msg => _log(msg));
     _deselect();
-    set({ turn: "enemy" });
+
+    const lavaResult = checkGameOver(processedUnits);
+    if (lavaResult) {
+      set({ units: processedUnits, gameOver: lavaResult });
+      return;
+    }
+
+    set({ units: processedUnits, turn: "enemy" });
     _log("El enemigo actúa...");
   },
 
@@ -330,13 +463,12 @@ const useGameStore = create((set, get) => ({
 
   setEnemyBusy: (busy) => set({ enemyBusy: busy }),
 
-  applyEnemyMove: (enemyId, row, col) => {
+  applyEnemyMove: (enemyId, row, col) =>
     set((state) => ({
       units: state.units.map((u) =>
-        u.id === enemyId ? { ...u, row, col, moved: true } : u
+        u.id === enemyId ? { ...u, row, col, movesUsed: (u.movesUsed ?? 0) + 1 } : u
       ),
-    }));
-  },
+    })),
 
   applyEnemyAttack: (enemyId, targetId) => {
     const { units, _log } = get();
@@ -348,14 +480,11 @@ const useGameStore = create((set, get) => ({
     const newHp = Math.max(0, target.hp - dmg);
     const died  = newHp <= 0;
 
-    // Intentar aplicar efecto de estado
     const statusResult = !died ? tryApplyStatusEffect(enemy, target) : null;
 
-    // Construir lista de efectos actualizada en el target
     let newEffects = [...(target.statusEffects ?? [])];
     if (statusResult) {
       if (statusResult.refresh) {
-        // Refrescar duración del efecto existente
         newEffects = newEffects.map(e =>
           e.type === statusResult.type ? { ...e, duration: statusResult.duration } : e
         );
@@ -368,7 +497,6 @@ const useGameStore = create((set, get) => ({
       }
     }
 
-    // Log
     let msg = `${enemy.name} ataca a ${target.name}: -${dmg} HP`;
     if (died) msg += " ¡Caído!";
     else if (statusResult && !statusResult.refresh) {
@@ -378,10 +506,8 @@ const useGameStore = create((set, get) => ({
     _log(msg);
 
     const newUnits = units.map((u) => {
-      if (u.id === targetId)
-        return { ...u, hp: newHp, alive: !died, statusEffects: newEffects };
-      if (u.id === enemyId)
-        return { ...u, attacked: true };
+      if (u.id === targetId) return { ...u, hp: newHp, alive: !died, statusEffects: newEffects };
+      if (u.id === enemyId)  return { ...u, attacked: true };
       return u;
     });
 
@@ -390,63 +516,59 @@ const useGameStore = create((set, get) => ({
   },
 
   finishEnemyTurn: () => {
-    const { roundNumber, units, _log } = get();
+    const { roundNumber, units, currentMapKey, _log } = get();
     const newRound = roundNumber + 1;
+    const map = MAPS[currentMapKey];
+    const allLogs = [];
 
+    // 1. Tick de efectos de estado + lava en TODAS las unidades
     let processedUnits = units.map(u => {
-      if (u.team !== "player" || !u.alive) return u;
-
-      let hp = u.hp;
-      const nextEffects = [];
-
-      // Efectos de estado negativos (veneno, quemadura, hemorragia)
-      for (const effect of (u.statusEffects ?? [])) {
-        hp = Math.max(0, hp - effect.damage);
-        _log(`${u.name} sufre ${effect.damage} de daño por ${
-          effect.type === "poison" ? "veneno" :
-          effect.type === "burn"   ? "quemadura" : "hemorragia"
-        } ☠`);
-        if (effect.duration - 1 > 0) nextEffects.push({ ...effect, duration: effect.duration - 1 });
-      }
-
-      const died = hp <= 0;
-      if (died) { _log(`${u.name} ha sucumbido a sus heridas. ¡Caído!`); }
-
-      // Pasiva on_turn (curación)
-      let finalHp = hp;
-      if (!died && u.abilityKey) {
-        const ab = ABILITIES[u.abilityKey];
-        if (ab?.type === "passive" && ab.trigger === "on_turn" && ab.effect.type === "heal") {
-          finalHp = Math.min(u.maxHp, hp + ab.effect.amount);
-          if (finalHp > hp) _log(`${u.name} regenera ${finalHp - hp} HP ❤`);
-        }
-      }
-
-      // Reducir cooldown de habilidad activa
-      const newCooldown = Math.max(0, (u.abilityCooldown ?? 0) - 1);
-
-      return { ...u, hp: finalHp, alive: !died, statusEffects: nextEffects, abilityCooldown: newCooldown };
+      if (!u.alive) return u;
+      const { unit: afterStatus, logs: statusLogs } = tickStatusEffects(u);
+      allLogs.push(...statusLogs);
+      const { unit: afterTile, logs: tileLogs } = tickTileEffects(afterStatus, map.grid);
+      allLogs.push(...tileLogs);
+      return afterTile;
     });
+
+    allLogs.forEach(msg => _log(msg));
 
     const gameOverResult = checkGameOver(processedUnits);
 
+    // 2. Pasiva on_turn (curación) — solo jugadores vivos
+    processedUnits = processedUnits.map(u => {
+      if (u.team !== "player" || !u.alive || !u.abilityKey) return u;
+      const ab = ABILITIES[u.abilityKey];
+      if (ab?.type === "passive" && ab.trigger === "on_turn" && ab.effect.type === "heal") {
+        const healed = Math.min(u.maxHp, u.hp + ab.effect.amount);
+        if (healed > u.hp) _log(`${u.name} regenera ${healed - u.hp} HP ❤`);
+        return { ...u, hp: healed };
+      }
+      return u;
+    });
+
+    // 3. Resetear flags de turno — movesUsed vuelve a 0 para todos
+    processedUnits = processedUnits.map(u => ({
+      ...u,
+      movesUsed: 0,
+      attacked: false,
+      abilityUsed: false,
+      abilityCooldown: Math.max(0, (u.abilityCooldown ?? 0) - 1),
+    }));
+
     set({
-      units: processedUnits.map(u => ({ ...u, moved: false, attacked: false, abilityUsed: false })),
+      units: processedUnits,
       turn: "player",
       roundNumber: newRound,
       enemyBusy: false,
       ...(gameOverResult ? { gameOver: gameOverResult } : {}),
     });
+
     if (!gameOverResult) _log(`— Ronda ${newRound} — Tu turno.`);
   },
 
-  /**
-   * Usa la habilidad activa del héroe seleccionado.
-   * targetId: id del enemigo objetivo (para single_enemy y aoe)
-   * targetPos: {row, col} para aoe sin objetivo concreto
-   */
   useAbility: (attackerId, targetId = null) => {
-    const { units, currentMapKey, _log, _deselect } = get();
+    const { units, currentMapKey, _log } = get();
     const attacker = units.find(u => u.id === attackerId);
     if (!attacker || !attacker.alive || attacker.abilityUsed) return;
 
@@ -465,9 +587,7 @@ const useGameStore = create((set, get) => ({
       const pivot = units.find(u => u.id === targetId);
       if (!pivot) return;
       affectedIds = liveEnemies
-        .filter(e =>
-          Math.abs(e.row - pivot.row) + Math.abs(e.col - pivot.col) <= (ab.aoeRadius ?? 1)
-        )
+        .filter(e => Math.abs(e.row - pivot.row) + Math.abs(e.col - pivot.col) <= (ab.aoeRadius ?? 1))
         .map(e => e.id);
     } else if (ab.targetMode === "single_enemy" && targetId) {
       affectedIds = [targetId];
@@ -478,11 +598,10 @@ const useGameStore = create((set, get) => ({
       return;
     }
 
-    let newUnits = units.map(u => {
+    const newUnits = units.map(u => {
       if (u.id === attackerId) return { ...u, attacked: true, abilityUsed: true, abilityCooldown: ab.cooldown };
       if (affectedIds.includes(u.id) && ab.effect.type === "damage") {
-        const dmg   = ab.effect.damage ?? 0;
-        const newHp = Math.max(0, u.hp - dmg);
+        const newHp = Math.max(0, u.hp - (ab.effect.damage ?? 0));
         return { ...u, hp: newHp, alive: newHp > 0 };
       }
       return u;
@@ -491,10 +610,20 @@ const useGameStore = create((set, get) => ({
     _log(`${attacker.name} usa ${ab.icon} ${ab.name}: ${affectedIds.length} objetivo${affectedIds.length > 1 ? "s" : ""} afectado${affectedIds.length > 1 ? "s" : ""}.`);
 
     set({ units: newUnits });
-    _deselect();
+
+    const updatedAttacker = { ...attacker, attacked: true };
+    const map = MAPS[currentMapKey];
+    const selectionPatch = computeSelectionState(updatedAttacker, newUnits, map);
+
+    if (canMove(updatedAttacker)) {
+      const movesLeft = (updatedAttacker.movesPerTurn ?? 1) - (updatedAttacker.movesUsed ?? 0);
+      _log(`${attacker.name} aún puede moverse (${movesLeft} movimiento${movesLeft > 1 ? "s" : ""}).`);
+    }
+
+    set(selectionPatch);
 
     const result = checkGameOver(newUnits);
-    if (result) set({ gameOver: result });
+    if (result) set({ gameOver: result, selectedUnitId: null, movableTiles: [], attackableUnitIds: [], phase: "select" });
   },
 }));
 

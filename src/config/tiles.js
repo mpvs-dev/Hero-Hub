@@ -37,7 +37,6 @@ export const TILE_TYPES = {
     decorUrl: null,
     effect: null,
   },
-
   W: {
     key: "W",
     name: "Agua",
@@ -68,8 +67,8 @@ export const TILE_TYPES = {
   V: {
     key: "V",
     name: "Lava",
-    walkable: false,
-    moveCost: 0,
+    walkable: true,
+    moveCost: 2,
     bg: "#3a1408",
     decorUrl: null,
     effect: { type: "damage", amount: 3 },
