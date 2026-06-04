@@ -3,19 +3,20 @@ import UnitToken from "./UnitToken";
 
 // Configuración visual de estados
 const HIGHLIGHT = {
-  selected: { outline: "2.5px solid #ffffff", overlay: null },
-  attackable: {
-    outline: "2.5px solid #E24B4A",
-    overlay: "rgba(220,60,60,0.20)",
-  },
-  movable: { outline: "2.5px solid #c9a84c", overlay: "rgba(200,160,60,0.20)" },
-  none: { outline: "none", overlay: null },
+  selected:   { outline: "2.5px solid #ffffff", overlay: null },
+  attackable: { outline: "2.5px solid #E24B4A", overlay: "rgba(220,60,60,0.20)" },
+  movable:    { outline: "2.5px solid #c9a84c", overlay: "rgba(200,160,60,0.20)" },
+  deployable: { outline: "2.5px solid #4adf8a", overlay: "rgba(60,200,100,0.18)" },
+  inspected:  { outline: "2.5px solid #e07040", overlay: "rgba(200,80,40,0.12)" },
+  none:       { outline: "none", overlay: null },
 };
 
-function getHighlight(isSelected, isAttackable, isMovable) {
-  if (isSelected) return HIGHLIGHT.selected;
+function getHighlight(isSelected, isAttackable, isMovable, isDeployable, isInspected) {
+  if (isSelected)   return HIGHLIGHT.selected;
   if (isAttackable) return HIGHLIGHT.attackable;
-  if (isMovable) return HIGHLIGHT.movable;
+  if (isMovable)    return HIGHLIGHT.movable;
+  if (isDeployable) return HIGHLIGHT.deployable;
+  if (isInspected)  return HIGHLIGHT.inspected;
   return HIGHLIGHT.none;
 }
 
@@ -25,12 +26,15 @@ export default function Tile({
   isMovable,
   isAttackable,
   isSelected,
+  isDeployable,
+  isInspectable,
+  isInspected,
   tileSize,
   onClick,
 }) {
   const tile = TILE_TYPES[tileKey] ?? TILE_TYPES.G;
-  const highlight = getHighlight(isSelected, isAttackable, isMovable);
-  const isClickable = isMovable || isAttackable || unit?.team === "player";
+  const highlight = getHighlight(isSelected, isAttackable, isMovable, isDeployable, isInspected);
+  const isClickable = isMovable || isAttackable || isDeployable || isInspectable || unit?.team === "player";
 
   return (
     <div
@@ -52,7 +56,7 @@ export default function Tile({
         overflow: "hidden",
       }}
     >
-      {/* Imagen de decoración del tile (grass, forest, etc.) */}
+      {/* Imagen de decoración del tile */}
       {!unit && tile.decorUrl && (
         <img
           src={tile.decorUrl}
