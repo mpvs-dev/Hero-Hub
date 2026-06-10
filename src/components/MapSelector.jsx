@@ -4,6 +4,8 @@ import { TILE_TYPES }      from "../config/tiles";
 import useGameStore        from "../store/useGameStore";
 import Sprite              from "./Sprite";
 import { PLAYER_HEROES }   from "../store/useGameStore";
+import Credits         from './Credits';
+
 
 // ─── Hook de ancho de ventana ─────────────────────────────────────────────────
 function useWindowWidth() {
@@ -406,6 +408,7 @@ export default function MapSelector() {
       >
         ← Escuadrón
       </button>
+      <Credits/>
     </div>
   );
 }

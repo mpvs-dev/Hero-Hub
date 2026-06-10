@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import useGameStore  from './store/useGameStore';
 import { MAPS }      from './config/maps';
 import { computeEnemyAction } from './engine/gameEngine';
@@ -6,11 +6,13 @@ import { computeEnemyAction } from './engine/gameEngine';
 import HeroLobby       from './components/HeroLobby';
 import AbilitySelector from './components/AbilitySelector';
 import MapSelector     from './components/MapSelector';
-import HUD          from './components/HUD';
-import GameOver     from './components/GameOver';
-import Grid         from './components/Grid';
-import Sidebar      from './components/Sidebar';
-import AbilityBar   from './components/AbilityBar';
+import HUD             from './components/HUD';
+import GameOver        from './components/GameOver';
+import Grid            from './components/Grid';
+import Sidebar         from './components/Sidebar';
+import AbilityBar      from './components/AbilityBar';
+import EnemyReveal     from './components/EnemyReveal';
+import Credits         from './components/Credits';
 
 const ENEMY_THINK_MS = 650;
 const ENEMY_MOVE_MS  = 200;
@@ -27,12 +29,44 @@ export function useWindowWidth() {
   return width;
 }
 
-function useEnemyAI() {
-  const turn          = useGameStore(s => s.turn);
+// ─── Reveal de enemigos al inicio ────────────────────────────────────────────
+
+function useEnemyReveal() {
+  const phase        = useGameStore(s => s.phase);
   const currentMapKey = useGameStore(s => s.currentMapKey);
-  const enemyBusy     = useGameStore(s => s.enemyBusy);
-  const gameOver      = useGameStore(s => s.gameOver);
-  const phase         = useGameStore(s => s.phase);
+  const [showing, setShowing] = useState(false);
+
+  // Cuando la batalla comienza (phase pasa a "select" por primera vez)
+  // activamos el reveal
+  const prevPhaseRef = useState(null);
+
+  useEffect(() => {
+    const prev = prevPhaseRef[0];
+    if (prev === "deploy" && phase === "select") {
+      setShowing(true);
+    }
+    prevPhaseRef[0] = phase;
+  }, [phase]);
+
+  // Resetear al cambiar de mapa
+  useEffect(() => {
+    setShowing(false);
+    prevPhaseRef[0] = null;
+  }, [currentMapKey]);
+
+  const onDone = useCallback(() => setShowing(false), []);
+
+  return { showing, onDone };
+}
+
+// ─── IA del enemigo ───────────────────────────────────────────────────────────
+
+function useEnemyAI() {
+  const turn           = useGameStore(s => s.turn);
+  const currentMapKey  = useGameStore(s => s.currentMapKey);
+  const enemyBusy      = useGameStore(s => s.enemyBusy);
+  const gameOver       = useGameStore(s => s.gameOver);
+  const phase          = useGameStore(s => s.phase);
 
   useEffect(() => {
     if (turn !== 'enemy' || enemyBusy || gameOver || !currentMapKey || phase === 'deploy') return;
@@ -53,10 +87,27 @@ function useEnemyAI() {
         if (!enemy || !enemy.alive) continue;
 
         const action = computeEnemyAction(enemy, freshUnits, map.grid, map.w, map.h);
+
         if (action.movedTo) {
-          applyEnemyMove(enemyId, action.movedTo.row, action.movedTo.col);
+          // applyEnemyMove ahora devuelve resultado si hay muerte por lava
+          const lavaResult = applyEnemyMove(enemyId, action.movedTo.row, action.movedTo.col);
           await new Promise(r => setTimeout(r, ENEMY_MOVE_MS));
+
+          if (lavaResult) {
+            // Enemigo murió en la lava — verificar si el jugador gana
+            if (lavaResult === 'win') {
+              useGameStore.setState({ gameOver: 'win', enemyBusy: false });
+              return;
+            }
+            // El propio enemigo murió, pasar al siguiente
+            continue;
+          }
         }
+
+        // Verificar que siga vivo tras el movimiento
+        const freshEnemy = useGameStore.getState().units.find(u => u.id === enemyId);
+        if (!freshEnemy?.alive) continue;
+
         if (action.attackTargetId) {
           const freshTarget = useGameStore.getState().units
             .find(u => u.id === action.attackTargetId);
@@ -69,6 +120,7 @@ function useEnemyAI() {
           }
         }
       }
+
       if (useGameStore.getState().gameOver) {
         useGameStore.setState({ enemyBusy: false });
         return;
@@ -81,27 +133,31 @@ function useEnemyAI() {
   }, [turn, currentMapKey, phase]);
 }
 
-// ─── Constantes de layout desktop ────────────────────────────────────────────
-const SIDEBAR_W = 220; // ancho fijo del sidebar en desktop
-const H_PAD     = 32;  // padding horizontal total (16px × 2)
-const GAP       = 12;  // gap entre grid y sidebar
+// ─── Layout ───────────────────────────────────────────────────────────────────
+
+const SIDEBAR_W = 220;
+const H_PAD     = 32;
+const GAP       = 12;
 
 export default function App() {
   const screen   = useGameStore(s => s.screen);
+  const units    = useGameStore(s => s.units);
   const width    = useWindowWidth();
   const isMobile = width < 640;
 
   useEnemyAI();
 
+  const { showing: revealShowing, onDone: revealDone } = useEnemyReveal();
+
   if (screen === 'lobby')         return <HeroLobby />;
   if (screen === 'abilitySelect') return <AbilitySelector />;
   if (screen === 'mapSelect')     return <MapSelector />;
 
-  // Ancho total disponible, limitado a un máximo razonable y centrado
   const MAX_TOTAL = 900;
   const totalW    = Math.min(width - H_PAD, MAX_TOTAL);
-  // El mapa ocupa lo que queda después del sidebar y el gap
-  const mapW = totalW - SIDEBAR_W - GAP;
+  const mapW      = totalW - SIDEBAR_W - GAP;
+
+  const liveEnemies = units.filter(u => u.team === "enemy" && u.alive);
 
   return (
     <div style={{
@@ -113,7 +169,6 @@ export default function App() {
       flexDirection: 'column',
       alignItems: 'center',
     }}>
-      {/* Contenedor interno con ancho máximo — se centra automáticamente */}
       <div style={{
         width: '100%',
         maxWidth: isMobile ? '100%' : MAX_TOTAL,
@@ -130,6 +185,7 @@ export default function App() {
           marginTop: 10,
           width: '100%',
           boxSizing: 'border-box',
+          position: 'relative',
         }}>
           {/* Grid */}
           <div style={{
@@ -151,7 +207,13 @@ export default function App() {
             <Sidebar isMobile={isMobile} />
           </div>
         </div>
+        <Credits />
       </div>
+
+      {/* Reveal de enemigos al inicio de la batalla */}
+      {revealShowing && (
+        <EnemyReveal enemies={liveEnemies} onDone={revealDone} />
+      )}
     </div>
   );
 }

@@ -3,6 +3,8 @@ import Sprite from "./Sprite";
 import useGameStore from "../store/useGameStore";
 import { ABILITIES, HERO_ABILITY_POOL } from "../config/abilities";
 import { HEROES } from "../config/heroes";
+import Credits from './Credits';
+
 
 // ─── Badge de tipo ─────────────────────────────────────────────────────────────
 function TypeBadge({ type }) {
@@ -309,6 +311,7 @@ export default function AbilitySelector() {
       >
         ← Cambiar escuadrón
       </button>
+      <Credits />
     </div>
   );
 }

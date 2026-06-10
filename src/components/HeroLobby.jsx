@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Sprite from "./Sprite";
 import useGameStore, { PLAYER_HEROES } from "../store/useGameStore";
+import Credits from "./Credits";
 
 // ─── Hook de ancho ────────────────────────────────────────────────────────────
 function useWindowWidth() {
@@ -740,6 +741,7 @@ export default function HeroLobby() {
           width={width}
         />
       )}
+      <Credits/>
     </div>
   );
 }

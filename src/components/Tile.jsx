@@ -1,7 +1,6 @@
 import { TILE_TYPES } from "../config/tiles";
 import UnitToken from "./UnitToken";
 
-// Configuración visual de estados
 const HIGHLIGHT = {
   selected:   { outline: "2.5px solid #ffffff", overlay: null },
   attackable: { outline: "2.5px solid #E24B4A", overlay: "rgba(220,60,60,0.20)" },
@@ -31,14 +30,18 @@ export default function Tile({
   isInspected,
   tileSize,
   onClick,
+  // Coordenadas para que EnemyReveal pueda localizar la casilla
+  row,
+  col,
 }) {
-  const tile = TILE_TYPES[tileKey] ?? TILE_TYPES.G;
+  const tile      = TILE_TYPES[tileKey] ?? TILE_TYPES.G;
   const highlight = getHighlight(isSelected, isAttackable, isMovable, isDeployable, isInspected);
   const isClickable = isMovable || isAttackable || isDeployable || isInspectable || unit?.team === "player";
 
   return (
     <div
       onClick={onClick}
+      data-tile={`${row}-${col}`}
       style={{
         width: tileSize,
         height: tileSize,
@@ -56,18 +59,15 @@ export default function Tile({
         overflow: "hidden",
       }}
     >
-      {/* Imagen de decoración del tile */}
+      {/* Imagen de decoración */}
       {!unit && tile.decorUrl && (
         <img
           src={tile.decorUrl}
           alt=""
           style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            opacity: 0.65,
+            position: "absolute", inset: 0,
+            width: "100%", height: "100%",
+            objectFit: "cover", opacity: 0.65,
             imageRendering: "pixelated",
             pointerEvents: "none",
           }}
@@ -76,15 +76,12 @@ export default function Tile({
 
       {/* Overlay de highlight */}
       {highlight.overlay && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: highlight.overlay,
-            pointerEvents: "none",
-            zIndex: 1,
-          }}
-        />
+        <div style={{
+          position: "absolute", inset: 0,
+          background: highlight.overlay,
+          pointerEvents: "none",
+          zIndex: 1,
+        }} />
       )}
 
       {/* Unidad */}
