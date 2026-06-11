@@ -490,7 +490,7 @@ function HeroSlot({ index, heroKey, onClick, size }) {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function HeroLobby() {
-  const { roster, goToMapSelect } = useGameStore();
+  const { roster, goToModeSelect } = useGameStore();
   const [openSlot, setOpenSlot] = useState(null);
 
   const width = useWindowWidth();
@@ -691,7 +691,7 @@ export default function HeroLobby() {
         }}
       >
         <button
-          onClick={goToMapSelect}
+          onClick={goToModeSelect}
           disabled={!rosterComplete}
           style={{
             fontFamily: "Cinzel, serif",
@@ -726,7 +726,7 @@ export default function HeroLobby() {
           }}
         >
           {rosterComplete
-            ? "EMPEZAR CAMPAÑA →"
+            ? "Jugar →"
             : `${emptyCount} RANURA${emptyCount > 1 ? "S" : ""} VACÍA${emptyCount > 1 ? "S" : ""}`}
         </button>
       </div>
@@ -741,7 +741,7 @@ export default function HeroLobby() {
           width={width}
         />
       )}
-      <Credits/>
+      <Credits />
     </div>
   );
 }
