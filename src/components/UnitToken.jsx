@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import Sprite from "./Sprite";
 import { STATUS_EFFECTS } from "../config/enemies";
+import { UNIT_TOKEN_SPRITE_SIZE } from "../config/constants";
 
-const SPRITE_SIZE = 38;
 const HP_BAR_COLOR = { player: "#97C459", enemy: "#E24B4A" };
 
 // ─── Número flotante de daño ──────────────────────────────────────────────────
-
 function DamageNumber({ value, type = "damage" }) {
   // type: "damage" | "heal" | "status"
   const color =
@@ -126,7 +125,7 @@ export default function UnitToken({ unit, tileSize }) {
         )}
 
         {/* Sprite */}
-        <Sprite type={unit.type} size={SPRITE_SIZE} />
+        <Sprite type={unit.type} size={UNIT_TOKEN_SPRITE_SIZE} />
 
         {/* Barra de HP */}
         <div style={{

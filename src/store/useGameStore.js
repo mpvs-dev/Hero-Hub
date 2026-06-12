@@ -1,15 +1,10 @@
-/**
- * useGameStore.js
- * Ensambla todos los slices en un único store de Zustand.
- * Este archivo no contiene lógica — solo conecta las piezas.
- */
-
 import { create } from "zustand";
-import { LOG_MAX }                        from "./helpers";
-import { lobbyState,  createLobbySlice }  from "./lobbySlice";
-import { mapState,    createMapSlice }    from "./mapSlice";
+import { LOG_MAX } from "./helpers";
+import { lobbyState, createLobbySlice } from "./lobbySlice";
+import { mapState, createMapSlice } from "./mapSlice";
 import { combatState, createCombatSlice } from "./combatSlice";
-import { enemyState,  createEnemySlice }  from "./enemySlice";
+import { enemyState, createEnemySlice } from "./enemySlice";
+import { progressState, createProgressSlice } from "./progressSlice";
 
 export { PLAYER_HEROES } from "./lobbySlice";
 
@@ -19,9 +14,8 @@ const useGameStore = create((set, get) => ({
   ...mapState,
   ...combatState,
   ...enemyState,
+  ...progressState,
 
-  // ── Log compartido (usado por todos los slices via get()._log) ──
-  // Acepta string (retrocompatibilidad) o array de tokens [{text, type}]
   battleLog: [],
   _log: (message) =>
     set((state) => {
@@ -36,6 +30,7 @@ const useGameStore = create((set, get) => ({
   ...createMapSlice(set, get),
   ...createCombatSlice(set, get),
   ...createEnemySlice(set, get),
+  ...createProgressSlice(set, get),
 }));
 
 export default useGameStore;

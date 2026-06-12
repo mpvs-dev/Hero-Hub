@@ -1,9 +1,4 @@
-/**
- * combatSlice.js
- * Turno del jugador: selección, movimiento, ataque, habilidades y fin de turno.
- */
-
-import { MAPS }      from "../config/maps";
+import { MAPS } from "../config/maps";
 import { ABILITIES } from "../config/abilities";
 import {
   calculateDamage,
@@ -25,11 +20,12 @@ import {
   msgAlreadyActed, msgAbility, msgAbilityNoTargets,
   msgLavaTransit, msgLavaDeath, msgEnemyTurn,
 } from "../config/logColors";
+import { STATUS_ICON_LABELS } from "../config/constants";
 
 export const combatState = {
-  selectedUnitId:    null,
-  inspectedEnemyId:  null,
-  movableTiles:      [],
+  selectedUnitId: null,
+  inspectedEnemyId: null,
+  movableTiles: [],
   attackableUnitIds: [],
 };
 
@@ -73,7 +69,7 @@ export function createCombatSlice(set, get) {
       const unit = units.find(u => u.id === unitId);
       if (!unit || !canMove(unit)) return;
 
-      const map          = MAPS[currentMapKey];
+      const map = MAPS[currentMapKey];
       const newMovesUsed = (unit.movesUsed ?? 0) + 1;
 
       // Reconstruir el camino para detectar lava en tránsito
@@ -104,7 +100,7 @@ export function createCombatSlice(set, get) {
       }
 
       const updatedUnit = { ...unitAfterPath, row, col, movesUsed: newMovesUsed };
-      const movesLeft   = (updatedUnit.movesPerTurn ?? 1) - newMovesUsed;
+      const movesLeft = (updatedUnit.movesPerTurn ?? 1) - newMovesUsed;
 
       if (movesLeft > 0 && !canAttack(updatedUnit)) {
         get()._log(msgMove({ unitName: unit.name, unitTeam: unit.team, movesLeft }));
@@ -118,12 +114,12 @@ export function createCombatSlice(set, get) {
     attackUnit: (attackerId, targetId) => {
       const { units, currentMapKey } = get();
       const attacker = units.find(u => u.id === attackerId);
-      const target   = units.find(u => u.id === targetId);
+      const target = units.find(u => u.id === targetId);
       if (!attacker || !target || !canAttack(attacker)) return;
 
-      const dmg   = calculateDamage(attacker, target);
+      const dmg = calculateDamage(attacker, target);
       const newHp = Math.max(0, target.hp - dmg);
-      const died  = newHp <= 0;
+      const died = newHp <= 0;
 
       // Pasiva on_attack
       let newTargetEffects = [...(target.statusEffects ?? [])];
@@ -139,33 +135,32 @@ export function createCombatSlice(set, get) {
               );
             } else {
               newTargetEffects.push({
-                type:     ab.effect.statusType,
+                type: ab.effect.statusType,
                 duration: ab.effect.duration,
-                damage:   ab.effect.damage,
+                damage: ab.effect.damage,
               });
             }
           }
         }
       }
 
-      const STATUS_ICONS = { poison: "☠ Envenenado", burn: "🔥 Quemado", bleed: "🩸 Sangrando" };
       const newEffect = newTargetEffects.find(
         e => !(target.statusEffects ?? []).find(o => o.type === e.type)
       );
-      const statusName = !died && newEffect ? (STATUS_ICONS[newEffect.type] ?? newEffect.type) : null;
+      const statusName = !died && newEffect ? (STATUS_ICONS_LABELS[newEffect.type] ?? newEffect.type) : null;
 
       get()._log(msgAttack({
         attackerName: attacker.name,
         attackerTeam: attacker.team,
-        targetName:   target.name,
-        targetTeam:   target.team,
-        damage:       dmg,
+        targetName: target.name,
+        targetTeam: target.team,
+        damage: dmg,
         died,
         statusName,
       }));
 
       const newUnits = units.map(u => {
-        if (u.id === targetId)   return { ...u, hp: newHp, alive: !died, statusEffects: newTargetEffects };
+        if (u.id === targetId) return { ...u, hp: newHp, alive: !died, statusEffects: newTargetEffects };
         if (u.id === attackerId) return { ...u, attacked: true };
         return u;
       });
@@ -193,7 +188,7 @@ export function createCombatSlice(set, get) {
       if (!ab || ab.type !== "active" || (attacker.abilityCooldown ?? 0) > 0) return;
 
       const liveEnemies = units.filter(u => u.team === "enemy" && u.alive);
-      let affectedIds   = [];
+      let affectedIds = [];
 
       if (ab.targetMode === "all_enemies") {
         affectedIds = liveEnemies
@@ -248,7 +243,7 @@ export function createCombatSlice(set, get) {
       const { turn, enemyBusy, gameOver, units, currentMapKey } = get();
       if (turn !== "player" || enemyBusy || gameOver) return;
 
-      const map     = MAPS[currentMapKey];
+      const map = MAPS[currentMapKey];
       const allLogs = [];
 
       // Daño de lava a héroes al terminar su turno

@@ -1,25 +1,9 @@
-/**
- * useMovementAnimation.js
- *
- * Detecta cambios de posición en las unidades y produce una animación
- * paso a paso por el camino real del pathfinding.
- *
- * Retorna:
- *   animatingUnit  — id de la unidad en movimiento (ocultar su tile real)
- *   animUnitData   — objeto unidad completo para el sprite del overlay
- *   animPos        — { x, y } px relativos al contenedor del grid
- *   animPath       — [{row,col}] camino completo para PathTrail
- *   currentStep    — índice del frame actual (para opacidad del rastro)
- *   isAnimating    — boolean para bloquear clicks
- */
-
 import { useEffect, useRef, useState } from "react";
 import { getMovableTilesWithPaths, getPathTo } from "../engine/gameEngine";
 import { MAPS } from "../config/maps";
+import { MOVEMENT_STEP_MS, GRID_GAP, GRID_PADDING } from "../config/constants";
 
-const STEP_MS = 130; // ms por casilla
-
-function tileToPixel(row, col, tileSize, gap, padding = 2) {
+function tileToPixel(row, col, tileSize, gap, padding = GRID_PADDING) {
   return {
     x: padding + col * (tileSize + gap),
     y: padding + row * (tileSize + gap),
@@ -148,10 +132,10 @@ export default function useMovementAnimation(units, currentMapKey, tileSize, gap
           currentStep: frameIdx,
         }));
 
-        setTimeout(step, STEP_MS);
+        setTimeout(step, MOVEMENT_STEP_MS);
       };
 
-      setTimeout(step, STEP_MS);
+      setTimeout(step, MOVEMENT_STEP_MS);
       break; // una unidad a la vez
     }
   }, [units, currentMapKey, tileSize, gap]);

@@ -1,6 +1,18 @@
 import { TILE_TYPES } from "../config/tiles";
-import { HEROES }     from "../config/heroes";
-import { ENEMIES }    from "../config/enemies";
+import { HEROES } from "../config/heroes";
+import { ENEMIES, getBossStats } from "../config/enemies";
+import {
+  DAMAGE_VARIANCE_MIN,
+  DAMAGE_VARIANCE_MAX,
+  DAMAGE_MINIMUM,
+  GOBLIN_FLEE_HP_RATIO,
+  GOBLIN_FLANK_BONUS,
+  GOBLIN_EXPOSURE_PENALTY,
+  DARKMAGE_DANGER_DISTANCE,
+  DARKMAGE_MELEE_PENALTY,
+  DARKMAGE_EXPOSURE_PENALTY,
+  DARKMAGE_LAVA_PENALTY,
+} from "../config/constants";
 
 const UNITS = { ...HEROES, ...ENEMIES };
 
@@ -10,19 +22,10 @@ export function getDistance(a, b) {
   return Math.abs(a.row - b.row) + Math.abs(a.col - b.col);
 }
 
-// ─── Movimiento (Dijkstra con moveCost por tile) ──────────────────────────────
-
-/**
- * Ejecuta Dijkstra desde la posición del unit.
- * Devuelve { tiles, parentMap, startKey } para poder reconstruir caminos.
- *   tiles     → array de [row, col] alcanzables (sin incluir la celda de origen)
- *   parentMap → Map<"row,col", "row,col"> para reconstruir el camino completo
- *   startKey  → "row,col" del origen
- */
 export function getMovableTilesWithPaths(unit, allUnits, mapGrid, mapWidth, mapHeight) {
-  const costMap   = {};
+  const costMap = {};
   const parentMap = new Map();
-  const startKey  = `${unit.row},${unit.col}`;
+  const startKey = `${unit.row},${unit.col}`;
   costMap[startKey] = 0;
 
   const queue = [[0, unit.row, unit.col]];
@@ -33,7 +36,7 @@ export function getMovableTilesWithPaths(unit, allUnits, mapGrid, mapWidth, mapH
       .map(u => `${u.row},${u.col}`)
   );
 
-  const directions = [[-1,0],[1,0],[0,-1],[0,1]];
+  const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 
   while (queue.length > 0) {
     queue.sort((a, b) => a[0] - b[0]);
@@ -106,9 +109,10 @@ export function getAttackableUnits(attacker, potentialTargets) {
 }
 
 export function calculateDamage(attacker, defender) {
-  const base     = attacker.atk - defender.def;
-  const variance = Math.floor(Math.random() * 5) - 1;
-  return Math.max(1, base + variance);
+  const base = attacker.atk - defender.def;
+  const range = DAMAGE_VARIANCE_MAX - DAMAGE_VARIANCE_MIN + 1;
+  const variance = Math.floor(Math.random() * range) + DAMAGE_VARIANCE_MIN;
+  return Math.max(DAMAGE_MINIMUM, base + variance);
 }
 
 export function tryApplyStatusEffect(attacker, defender) {
@@ -121,10 +125,10 @@ export function tryApplyStatusEffect(attacker, defender) {
         return { refresh: true, type: ability.type, duration: ability.duration };
       }
       return {
-        refresh:  false,
-        type:     ability.type,
+        refresh: false,
+        type: ability.type,
         duration: ability.duration,
-        damage:   ability.damage,
+        damage: ability.damage,
       };
     }
   }
@@ -144,7 +148,7 @@ function shuffle(arr) {
 
 function walkableCells(zone, mapGrid) {
   return zone.filter(([r, c]) => {
-    const key  = mapGrid[r]?.[c];
+    const key = mapGrid[r]?.[c];
     const tile = TILE_TYPES[key];
     return tile && tile.walkable;
   });
@@ -173,7 +177,7 @@ function isExposedToPlayers(row, col, players, enemyRange) {
  * Penalización por tile peligroso (lava).
  */
 function tileDanger(row, col, mapGrid) {
-  const key  = mapGrid[row]?.[col];
+  const key = mapGrid[row]?.[col];
   const tile = TILE_TYPES[key];
   return tile?.effect?.type === "damage" ? tile.effect.amount : 0;
 }
@@ -199,16 +203,16 @@ function orcAction(enemy, allUnits, mapGrid, mapWidth, mapHeight) {
   if (getDistance(enemy, target) > enemy.range && movableTiles.length > 0) {
     // Moverse lo más cerca posible del objetivo, evitar lava
     const best = bestTile(movableTiles, ([r, c]) => {
-      const distScore  = -getDistance({ row: r, col: c }, target);
-      const lavaScore  = -tileDanger(r, c, mapGrid) * 2;
+      const distScore = -getDistance({ row: r, col: c }, target);
+      const lavaScore = -tileDanger(r, c, mapGrid) * 2;
       return distScore + lavaScore;
     });
     if (best) currentPos = { row: best[0], col: best[1] };
   }
 
   // Atacar desde la nueva posición
-  const movedEnemy   = { ...enemy, ...currentPos };
-  const inRange      = livePlayers.filter(p => getDistance(movedEnemy, p) <= enemy.range);
+  const movedEnemy = { ...enemy, ...currentPos };
+  const inRange = livePlayers.filter(p => getDistance(movedEnemy, p) <= enemy.range);
   const attackTarget = inRange.length > 0
     ? [...inRange].sort((a, b) => a.hp - b.hp)[0]  // rematar al más débil
     : null;
@@ -230,10 +234,10 @@ function goblinAction(enemy, allUnits, mapGrid, mapWidth, mapHeight) {
   const livePlayers = allUnits.filter(u => u.team === "player" && u.alive);
   if (livePlayers.length === 0) return { movedTo: null, attackTargetId: null };
 
-  const hpRatio     = enemy.hp / (enemy.maxHp ?? enemy.hp);
-  const isScared    = hpRatio < 0.3;
+  const hpRatio = enemy.hp / (enemy.maxHp ?? enemy.hp);
+  const isScared = hpRatio < GOBLIN_FLEE_HP_RATIO;
   const movableTiles = getMovableTiles(enemy, allUnits, mapGrid, mapWidth, mapHeight);
-  let currentPos    = { row: enemy.row, col: enemy.col };
+  let currentPos = { row: enemy.row, col: enemy.col };
 
   if (isScared) {
     // HUIR: moverse lo más lejos posible de todos los héroes
@@ -264,13 +268,13 @@ function goblinAction(enemy, allUnits, mapGrid, mapWidth, mapHeight) {
       const distScore = -getDistance({ row: r, col: c }, target);
 
       // Bonificación por flanquear: no estar en la misma fila/columna que el target
-      const flankBonus = (r !== target.row && c !== target.col) ? 1.5 : 0;
+      const flankBonus = (r !== target.row && c !== target.col) ? GOBLIN_FLANK_BONUS : 0;
 
       // Penalización por quedar expuesto a muchos héroes
       const exposedCount = livePlayers.filter(
         p => getDistance({ row: r, col: c }, p) <= p.range
       ).length;
-      const exposureScore = -exposedCount * 2;
+      const exposureScore = -exposedCount * GOBLIN_EXPOSURE_PENALTY;
 
       const lavaScore = -tileDanger(r, c, mapGrid) * 2;
 
@@ -280,8 +284,8 @@ function goblinAction(enemy, allUnits, mapGrid, mapWidth, mapHeight) {
   }
 
   // Atacar desde la nueva posición
-  const movedEnemy   = { ...enemy, ...currentPos };
-  const inRange      = livePlayers.filter(p => getDistance(movedEnemy, p) <= enemy.range);
+  const movedEnemy = { ...enemy, ...currentPos };
+  const inRange = livePlayers.filter(p => getDistance(movedEnemy, p) <= enemy.range);
   // Prioriza el héroe con menor HP%
   const attackTarget = inRange.length > 0
     ? [...inRange].sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0]
@@ -293,14 +297,6 @@ function goblinAction(enemy, allUnits, mapGrid, mapWidth, mapHeight) {
   };
 }
 
-/**
- * DARKMAGE — Hechicero conservador
- * Prioridad: héroe con más ATK (eliminar amenazas primero).
- * Movimiento: mantiene distancia ÓPTIMA = su rango de ataque (3).
- *   - Si está demasiado lejos, se acerca hasta rango.
- *   - Si está demasiado cerca, se aleja para no ser golpeado en CaC.
- * Nunca entra en casilla adyacente a un héroe si puede evitarlo.
- */
 function darkMageAction(enemy, allUnits, mapGrid, mapWidth, mapHeight) {
   const livePlayers = allUnits.filter(u => u.team === "player" && u.alive);
   if (livePlayers.length === 0) return { movedTo: null, attackTargetId: null };
@@ -308,35 +304,35 @@ function darkMageAction(enemy, allUnits, mapGrid, mapWidth, mapHeight) {
   // Prioriza al héroe con más ATK (la mayor amenaza)
   const target = [...livePlayers].sort((a, b) => b.atk - a.atk)[0];
 
-  const optimalRange   = enemy.range;       // 3 para el Darkmage
-  const dangerDistance = 1;                 // distancia a la que un CaC puede golpearle
-  const distToTarget   = getDistance(enemy, target);
+  const optimalRange = enemy.range;       // 3 para el Darkmage
+  const dangerDistance = DARKMAGE_DANGER_DISTANCE;                 // distancia a la que un CaC puede golpearle
+  const distToTarget = getDistance(enemy, target);
 
   const movableTiles = getMovableTiles(enemy, allUnits, mapGrid, mapWidth, mapHeight);
-  let currentPos     = { row: enemy.row, col: enemy.col };
+  let currentPos = { row: enemy.row, col: enemy.col };
 
   if (movableTiles.length > 0) {
     const best = bestTile(movableTiles, ([r, c]) => {
       const posToTarget = getDistance({ row: r, col: c }, target);
 
       // Puntuar por estar exactamente en rango óptimo
-      const rangeDiff  = Math.abs(posToTarget - optimalRange);
+      const rangeDiff = Math.abs(posToTarget - optimalRange);
       const rangeScore = -rangeDiff * 3;
 
       // Penalizar mucho estar adyacente a cualquier héroe CaC
       const meleeThreats = livePlayers.filter(
         p => p.range === 1 && getDistance({ row: r, col: c }, p) <= dangerDistance
       ).length;
-      const meleeScore = -meleeThreats * 8;
+      const meleeScore = -meleeThreats * DARKMAGE_MELEE_PENALTY;
 
       // Penalizar estar en rango de ataque de cualquier héroe
       const inAttackRange = livePlayers.filter(
         p => getDistance({ row: r, col: c }, p) <= p.range
       ).length;
-      const exposureScore = -inAttackRange * 2;
+      const exposureScore = -inAttackRange * DARKMAGE_EXPOSURE_PENALTY;
 
       // Evitar lava
-      const lavaScore = -tileDanger(r, c, mapGrid) * 4;
+      const lavaScore = -tileDanger(r, c, mapGrid) * DARKMAGE_LAVA_PENALTY;
 
       return rangeScore + meleeScore + exposureScore + lavaScore;
     });
@@ -345,7 +341,7 @@ function darkMageAction(enemy, allUnits, mapGrid, mapWidth, mapHeight) {
 
   // Atacar: desde la nueva posición, priorizar el de más ATK en rango
   const movedEnemy = { ...enemy, ...currentPos };
-  const inRange    = livePlayers.filter(p => getDistance(movedEnemy, p) <= enemy.range);
+  const inRange = livePlayers.filter(p => getDistance(movedEnemy, p) <= enemy.range);
   const attackTarget = inRange.length > 0
     ? [...inRange].sort((a, b) => b.atk - a.atk)[0]  // eliminar al más peligroso
     : null;
@@ -369,7 +365,7 @@ function genericAction(enemy, allUnits, mapGrid, mapWidth, mapHeight) {
   )[0];
 
   const movableTiles = getMovableTiles(enemy, allUnits, mapGrid, mapWidth, mapHeight);
-  let currentPos     = { row: enemy.row, col: enemy.col };
+  let currentPos = { row: enemy.row, col: enemy.col };
 
   if (getDistance(enemy, nearest) > enemy.range && movableTiles.length > 0) {
     const best = bestTile(movableTiles, ([r, c]) =>
@@ -378,8 +374,8 @@ function genericAction(enemy, allUnits, mapGrid, mapWidth, mapHeight) {
     if (best) currentPos = { row: best[0], col: best[1] };
   }
 
-  const movedEnemy   = { ...enemy, ...currentPos };
-  const inRange      = livePlayers.filter(p => getDistance(movedEnemy, p) <= enemy.range);
+  const movedEnemy = { ...enemy, ...currentPos };
+  const inRange = livePlayers.filter(p => getDistance(movedEnemy, p) <= enemy.range);
   const attackTarget = inRange.length > 0
     ? [...inRange].sort((a, b) => a.hp - b.hp)[0]
     : null;
@@ -410,10 +406,10 @@ export function computeEnemyAction(enemy, allUnits, mapGrid, mapWidth, mapHeight
 }
 
 // ─── Inicialización ───────────────────────────────────────────────────────────
-
-export function createUnitsFromMap(map) {
+export function createUnitsFromMap(map, levelIndex = 0) {
   const units = [];
 
+  // Héroes — igual que antes
   map.playerSpawns.forEach(({ type, row, col }, index) => {
     const def = UNITS[type];
     if (!def) { console.warn(`[GameEngine] Unidad desconocida: "${type}"`); return; }
@@ -425,15 +421,21 @@ export function createUnitsFromMap(map) {
     });
   });
 
-  const rawZone    = map.enemyDeployZone ?? [];
+  // Enemigos — usar el nivel actual si existe
+  const levelDef = map.levels?.[levelIndex];
+  const enemySpawns = levelDef?.enemySpawns ?? map.enemySpawns ?? [];
+
+  const rawZone = map.enemyDeployZone ?? [];
   const validCells = walkableCells(rawZone, map.grid);
-  const shuffled   = shuffle(validCells);
+  const shuffled = shuffle(validCells);
 
-  map.enemySpawns.forEach(({ type, row: fbRow, col: fbCol }, index) => {
-    const def = UNITS[type];
-    if (!def) { console.warn(`[GameEngine] Unidad desconocida: "${type}"`); return; }
+  enemySpawns.forEach(({ type, isBoss = false, row: fbRow, col: fbCol }, index) => {
+    const baseDef = ENEMIES[type];
+    if (!baseDef) { console.warn(`[GameEngine] Unidad desconocida: "${type}"`); return; }
 
-    const cell     = shuffled[index];
+    const def = isBoss ? getBossStats(baseDef) : baseDef;
+
+    const cell = shuffled[index];
     const spawnRow = cell ? cell[0] : (fbRow ?? index);
     const spawnCol = cell ? cell[1] : (fbCol ?? 0);
 
@@ -442,6 +444,7 @@ export function createUnitsFromMap(map) {
       maxHp: def.hp, row: spawnRow, col: spawnCol,
       alive: true, movesUsed: 0, attacked: false,
       movesPerTurn: 1,
+      isBossUnit: def.isBossUnit ?? false,
     });
   });
 
@@ -449,7 +452,6 @@ export function createUnitsFromMap(map) {
 }
 
 // ─── Estado del juego ─────────────────────────────────────────────────────────
-
 export function checkGameOver(units) {
   const players = units.filter(u => u.team === "player");
   const enemies = units.filter(u => u.team === "enemy");

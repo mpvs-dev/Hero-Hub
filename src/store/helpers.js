@@ -1,17 +1,8 @@
-/**
- * helpers.js
- * Funciones puras compartidas entre slices.
- * No importan zustand ni dependen del store.
- */
-
 import { TILE_TYPES } from "../config/tiles";
 import { getMovableTiles, getAttackableUnits } from "../engine/gameEngine";
-import {
-  msgStatusTick, msgDiedFromStatus,
-  msgLavaDamage, msgLavaTransit, msgLavaDeath,
-} from "../config/logColors";
+import { msgStatusTick, msgDiedFromStatus, msgLavaDamage, msgLavaTransit, msgLavaDeath } from "../config/logColors";
 
-export const LOG_MAX = 10;
+export { LOG_MAX } from "../config/constants";
 
 // ─── Estado de acción de una unidad ──────────────────────────────────────────
 

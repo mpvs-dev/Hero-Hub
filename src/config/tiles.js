@@ -1,13 +1,4 @@
-/**
- * Propiedades:
- *   key       → clave de un carácter usada en el grid del mapa
- *   name      → nombre que se muestra en la leyenda
- *   walkable  → si las unidades pueden moverse a este tile
- *   moveCost  → puntos de movimiento que cuesta entrar (1 = normal)
- *   bg        → color de fondo CSS del tile
- *   decorUrl  → ruta a imagen de decoración PNG
- *   effect    → efecto al terminar un turno encima del tile (opcional)
- */
+import { LAVA_TILE_DAMAGE } from "./constants";
 
 export const TILE_TYPES = {
   G: {
@@ -71,6 +62,6 @@ export const TILE_TYPES = {
     moveCost: 2,
     bg: "#3a1408",
     decorUrl: null,
-    effect: { type: "damage", amount: 3 },
+    effect: { type: "damage", amount: LAVA_TILE_DAMAGE },
   },
 };

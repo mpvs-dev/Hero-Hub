@@ -1,34 +1,25 @@
-/**
- * EnemyReveal.jsx
- * Overlay que aparece al inicio de la partida durante ~2.5s.
- * Muestra las posiciones enemigas con un pulso rojo y un contador regresivo.
- * Cuando termina llama a onDone() para que App.jsx cambie la fase a "select".
- */
-
 import { useEffect, useState } from "react";
-
-const REVEAL_MS   = 2500;
-const TICK_MS     = 100;
+import { ENEMY_REVEAL_MS, ENEMY_REVEAL_TICK } from "../config/constants";
 
 export default function EnemyReveal({ enemies, onDone }) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setElapsed(prev => {
-        if (prev + TICK_MS >= REVEAL_MS) {
+      setElapsed((prev) => {
+        if (prev + ENEMY_REVEAL_TICK >= ENEMY_REVEAL_MS) {
           clearInterval(interval);
           onDone();
-          return REVEAL_MS;
+          return ENEMY_REVEAL_MS;
         }
-        return prev + TICK_MS;
+        return prev + ENEMY_REVEAL_TICK;
       });
-    }, TICK_MS);
+    }, ENEMY_REVEAL_TICK);
     return () => clearInterval(interval);
   }, [onDone]);
 
-  const progress = elapsed / REVEAL_MS; // 0 → 1
-  const remaining = Math.ceil((REVEAL_MS - elapsed) / 1000);
+  const progress = elapsed / ENEMY_REVEAL_MS; // 0 → 1
+  const remaining = Math.ceil((ENEMY_REVEAL_MS - elapsed) / 1000);
 
   return (
     <>
@@ -44,66 +35,79 @@ export default function EnemyReveal({ enemies, onDone }) {
       `}</style>
 
       {/* Overlay semitransparente */}
-      <div style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        pointerEvents: "none",
-        background: "rgba(10,5,5,0.55)",
-        animation: "revealFadeIn 0.3s ease-out",
-      }}>
-
-        {/* Banner superior */}
-        <div style={{
-          position: "absolute",
-          top: 0, left: 0, right: 0,
-          padding: "10px 0 8px",
-          textAlign: "center",
-          background: "rgba(26,8,8,0.92)",
-          borderBottom: "1px solid #5a1a1a",
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 50,
+          pointerEvents: "none",
+          background: "rgba(10,5,5,0.55)",
           animation: "revealFadeIn 0.3s ease-out",
-        }}>
-          <div style={{
-            fontFamily: "Cinzel, serif",
-            fontSize: 11,
-            letterSpacing: 4,
-            color: "#E24B4A",
-            marginBottom: 6,
-          }}>
+        }}
+      >
+        {/* Banner superior */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            padding: "10px 0 8px",
+            textAlign: "center",
+            background: "rgba(26,8,8,0.92)",
+            borderBottom: "1px solid #5a1a1a",
+            animation: "revealFadeIn 0.3s ease-out",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "Cinzel, serif",
+              fontSize: 11,
+              letterSpacing: 4,
+              color: "#E24B4A",
+              marginBottom: 6,
+            }}
+          >
             ⚔ POSICIONES ENEMIGAS
           </div>
 
           {/* Barra de progreso */}
-          <div style={{
-            width: 160,
-            height: 3,
-            background: "#2a1010",
-            borderRadius: 2,
-            margin: "0 auto",
-            overflow: "hidden",
-          }}>
-            <div style={{
-              height: "100%",
-              width: `${(1 - progress) * 100}%`,
-              background: "#E24B4A",
+          <div
+            style={{
+              width: 160,
+              height: 3,
+              background: "#2a1010",
               borderRadius: 2,
-              transition: `width ${TICK_MS}ms linear`,
-            }} />
+              margin: "0 auto",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${(1 - progress) * 100}%`,
+                background: "#E24B4A",
+                borderRadius: 2,
+                transition: `width ${ENEMY_REVEAL_TICK}ms linear`,
+              }}
+            />
           </div>
 
-          <div style={{
-            fontFamily: "Cinzel, serif",
-            fontSize: 9,
-            color: "#5a2020",
-            marginTop: 5,
-            letterSpacing: 2,
-          }}>
+          <div
+            style={{
+              fontFamily: "Cinzel, serif",
+              fontSize: 9,
+              color: "#5a2020",
+              marginTop: 5,
+              letterSpacing: 2,
+            }}
+          >
             LA BATALLA COMIENZA EN {remaining}…
           </div>
         </div>
 
         {/* Marcadores de posición enemiga */}
-        {enemies.map(e => (
+        {enemies.map((e) => (
           <EnemyMarker key={e.id} enemy={e} />
         ))}
       </div>
@@ -123,7 +127,7 @@ function EnemyMarker({ enemy }) {
   useEffect(() => {
     // Buscar el tile correspondiente en el DOM por data-coords
     const el = document.querySelector(
-      `[data-tile="${enemy.row}-${enemy.col}"]`
+      `[data-tile="${enemy.row}-${enemy.col}"]`,
     );
     if (el) {
       const r = el.getBoundingClientRect();
@@ -134,46 +138,52 @@ function EnemyMarker({ enemy }) {
   if (!rect) return null;
 
   return (
-    <div style={{
-      position: "fixed",
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
-      pointerEvents: "none",
-      zIndex: 51,
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 2,
-    }}>
+    <div
+      style={{
+        position: "fixed",
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        pointerEvents: "none",
+        zIndex: 51,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+      }}
+    >
       {/* Borde pulsante */}
-      <div style={{
-        position: "absolute",
-        inset: 0,
-        border: "2px solid #E24B4A",
-        borderRadius: 2,
-        animation: "enemyPulse 0.8s ease-in-out infinite",
-      }} />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          border: "2px solid #E24B4A",
+          borderRadius: 2,
+          animation: "enemyPulse 0.8s ease-in-out infinite",
+        }}
+      />
 
       {/* Nombre */}
-      <div style={{
-        position: "absolute",
-        bottom: "100%",
-        left: "50%",
-        transform: "translateX(-50%)",
-        marginBottom: 3,
-        fontFamily: "Cinzel, serif",
-        fontSize: 8,
-        letterSpacing: 1,
-        color: "#E24B4A",
-        background: "rgba(26,8,8,0.9)",
-        padding: "2px 5px",
-        borderRadius: 2,
-        whiteSpace: "nowrap",
-        border: "1px solid #4a1010",
-      }}>
+      <div
+        style={{
+          position: "absolute",
+          bottom: "100%",
+          left: "50%",
+          transform: "translateX(-50%)",
+          marginBottom: 3,
+          fontFamily: "Cinzel, serif",
+          fontSize: 8,
+          letterSpacing: 1,
+          color: "#E24B4A",
+          background: "rgba(26,8,8,0.9)",
+          padding: "2px 5px",
+          borderRadius: 2,
+          whiteSpace: "nowrap",
+          border: "1px solid #4a1010",
+        }}
+      >
         {enemy.name}
       </div>
     </div>

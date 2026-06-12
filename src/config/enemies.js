@@ -1,19 +1,5 @@
-/*
- * Enemigos controlados por la IA.
- *
- * Propiedades de stats:
- *   hp       → puntos de vida máximos
- *   atk      → poder de ataque base
- *   def      → defensa (reduce el daño recibido)
- *   mov      → puntos de movimiento por turno
- *   range    → rango de ataque en casillas (1 = adyacente)
- *
- * abilities → array de efectos de estado que pueden aplicar al atacar:
- *   type     → 'poison' | 'burn' | 'bleed'
- *   chance   → probabilidad 0–1 (ej: 0.4 = 40%)
- *   duration → rondas que dura el efecto
- *   damage   → HP que quita por ronda
- */
+import { BOSS_HP_MULTIPLIER, BOSS_ATK_MULTIPLIER, BOSS_DEF_MULTIPLIER } from "./constants";
+
 export const ENEMIES = {
   orc: {
     key: 'orc',
@@ -68,27 +54,45 @@ export const ENEMIES = {
 // Configuración visual de cada efecto de estado
 export const STATUS_EFFECTS = {
   poison: {
-    label:   'Veneno',
-    icon:    '☠',
-    color:   '#7acc2a',
+    label: 'Veneno',
+    icon: '☠',
+    color: '#7acc2a',
     bgColor: '#1a2a0a',
-    border:  '#4a8a10',
-    desc:    (dmg, dur) => `Pierde ${dmg} HP al inicio de cada turno (${dur} ronda${dur > 1 ? 's' : ''})`,
+    border: '#4a8a10',
+    desc: (dmg, dur) => `Pierde ${dmg} HP al inicio de cada turno (${dur} ronda${dur > 1 ? 's' : ''})`,
   },
   burn: {
-    label:   'Quemadura',
-    icon:    '🔥',
-    color:   '#ff7730',
+    label: 'Quemadura',
+    icon: '🔥',
+    color: '#ff7730',
     bgColor: '#2a1008',
-    border:  '#aa3010',
-    desc:    (dmg, dur) => `Pierde ${dmg} HP al inicio de cada turno (${dur} ronda${dur > 1 ? 's' : ''})`,
+    border: '#aa3010',
+    desc: (dmg, dur) => `Pierde ${dmg} HP al inicio de cada turno (${dur} ronda${dur > 1 ? 's' : ''})`,
   },
   bleed: {
-    label:   'Hemorragia',
-    icon:    '🩸',
-    color:   '#e02020',
+    label: 'Hemorragia',
+    icon: '🩸',
+    color: '#e02020',
     bgColor: '#2a0808',
-    border:  '#880808',
-    desc:    (dmg, dur) => `Pierde ${dmg} HP al inicio de cada turno (${dur} ronda${dur > 1 ? 's' : ''})`,
+    border: '#880808',
+    desc: (dmg, dur) => `Pierde ${dmg} HP al inicio de cada turno (${dur} ronda${dur > 1 ? 's' : ''})`,
   },
 };
+
+export const BOSS_MULTIPLIERS = {
+  hp:  BOSS_HP_MULTIPLIER,
+  atk: BOSS_ATK_MULTIPLIER,
+  def: BOSS_DEF_MULTIPLIER,
+};
+
+// Helper — devuelve el enemy def con stats de jefe aplicados
+export function getBossStats(enemyDef) {
+  return {
+    ...enemyDef,
+    hp: Math.round(enemyDef.hp * BOSS_MULTIPLIERS.hp),
+    atk: Math.round(enemyDef.atk * BOSS_MULTIPLIERS.atk),
+    def: Math.round(enemyDef.def * BOSS_MULTIPLIERS.def),
+    name: `${enemyDef.name} Jefe`,
+    isBossUnit: true,
+  };
+}

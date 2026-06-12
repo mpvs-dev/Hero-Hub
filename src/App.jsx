@@ -13,9 +13,15 @@ import AbilityBar from "./components/AbilityBar";
 import EnemyReveal from "./components/EnemyReveal";
 import Credits from "./components/Credits";
 import ModeSelector from "./components/ModeSelector";
-
-const ENEMY_THINK_MS = 650;
-const ENEMY_MOVE_MS = 200;
+import {
+  ENEMY_THINK_MS,
+  ENEMY_MOVE_MS,
+  LAYOUT_SIDEBAR_W, // → renombrar SIDEBAR_WIDTH en App
+  LAYOUT_H_PAD,
+  LAYOUT_GAP,
+  LAYOUT_MAX_W,
+  SIDEBAR_WIDTH,
+} from "./config/constants";
 
 export function useWindowWidth() {
   const [width, setWidth] = useState(
@@ -156,11 +162,6 @@ function useEnemyAI() {
 }
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
-
-const SIDEBAR_W = 220;
-const H_PAD = 32;
-const GAP = 12;
-
 export default function App() {
   const screen = useGameStore((s) => s.screen);
   const units = useGameStore((s) => s.units);
@@ -177,8 +178,8 @@ export default function App() {
   if (screen === "mapSelect") return <MapSelector />;
 
   const MAX_TOTAL = 900;
-  const totalW = Math.min(width - H_PAD, MAX_TOTAL);
-  const mapW = totalW - SIDEBAR_W - GAP;
+  const totalW = Math.min(width - LAYOUT_H_PAD, LAYOUT_MAX_W);
+  const mapW = totalW - SIDEBAR_WIDTH - LAYOUT_GAP;
 
   const liveEnemies = units.filter((u) => u.team === "enemy" && u.alive);
 
@@ -188,7 +189,7 @@ export default function App() {
         minHeight: "100vh",
         background: "#0d0e0f",
         boxSizing: "border-box",
-        padding: isMobile ? "8px 8px 16px" : `12px ${H_PAD / 2}px 20px`,
+        padding: isMobile ? "8px 8px 16px" : `12px ${LAYOUT_H_PAD / 2}px 20px`,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -197,7 +198,7 @@ export default function App() {
       <div
         style={{
           width: "100%",
-          maxWidth: isMobile ? "100%" : MAX_TOTAL,
+          maxWidth: isMobile ? "100%" : LAYOUT_MAX_W,
           boxSizing: "border-box",
         }}
       >
@@ -208,7 +209,7 @@ export default function App() {
           style={{
             display: "flex",
             flexDirection: isMobile ? "column" : "row",
-            gap: isMobile ? 10 : GAP,
+            gap: isMobile ? 10 : LAYOUT_GAP,
             alignItems: "flex-start",
             marginTop: 10,
             width: "100%",
@@ -235,8 +236,8 @@ export default function App() {
           {/* Sidebar */}
           <div
             style={{
-              flex: isMobile ? "none" : `0 0 ${SIDEBAR_W}px`,
-              width: isMobile ? "100%" : SIDEBAR_W,
+              flex: isMobile ? "none" : `0 0 ${SIDEBAR_WIDTH}px`,
+              width: isMobile ? "100%" : SIDEBAR_WIDTH,
               boxSizing: "border-box",
             }}
           >

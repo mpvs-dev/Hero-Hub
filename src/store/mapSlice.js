@@ -1,8 +1,3 @@
-/**
- * mapSlice.js
- * Gestión del mapa activo: carga, despliegue de héroes, reset y salida.
- */
-
 import { MAPS }    from "../config/maps";
 import { HEROES }  from "../config/heroes";
 import { createUnitsFromMap } from "../engine/gameEngine";
@@ -27,7 +22,7 @@ export function createMapSlice(set, get) {
   return {
     // ── Inicio de mapa ───────────────────────────────────────
     startMap: (mapKey) => {
-      const { roster, chosenAbilities } = get();
+      const { roster, chosenAbilities, currentLevel } = get();
       const map = MAPS[mapKey];
 
       const customSpawns = roster.map((heroKey, i) => ({
@@ -36,7 +31,7 @@ export function createMapSlice(set, get) {
         col:  map.playerSpawns[i]?.col ?? 0,
       }));
 
-      const rawUnits    = createUnitsFromMap({ ...map, playerSpawns: customSpawns });
+      const rawUnits    = createUnitsFromMap({ ...map, playerSpawns: customSpawns }, currentLevel);
       const playerUnits = rawUnits.filter(u => u.team === "player");
       const enemyUnits  = rawUnits.filter(u => u.team === "enemy");
 

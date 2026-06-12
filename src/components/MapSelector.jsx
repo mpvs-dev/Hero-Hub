@@ -1,3 +1,5 @@
+// src/components/MapSelector.jsx
+
 import { useState, useEffect } from "react";
 import { MAPS } from "../config/maps";
 import { TILE_TYPES } from "../config/tiles";
@@ -6,7 +8,6 @@ import Sprite from "./Sprite";
 import { PLAYER_HEROES } from "../store/useGameStore";
 import Credits from "./Credits";
 
-// ─── Hook de ancho de ventana ─────────────────────────────────────────────────
 function useWindowWidth() {
   const [width, setWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1024,
@@ -19,14 +20,12 @@ function useWindowWidth() {
   return width;
 }
 
-// ─── Breakpoints ──────────────────────────────────────────────────────────────
 function useCols(width) {
   if (width < 480) return 1;
   if (width < 768) return 2;
   return 3;
 }
 
-// ─── Preview del mapa ─────────────────────────────────────────────────────────
 function MapPreview({ map }) {
   const playerZone = new Set(
     (map.deployZone ?? []).map(([r, c]) => `${r}-${c}`),
@@ -34,7 +33,6 @@ function MapPreview({ map }) {
   const enemyZone = new Set(
     (map.enemyDeployZone ?? []).map(([r, c]) => `${r}-${c}`),
   );
-
   return (
     <div
       style={{
@@ -60,7 +58,6 @@ function MapPreview({ map }) {
             const key = `${ri}-${ci}`;
             const inPlayer = playerZone.has(key);
             const inEnemy = enemyZone.has(key);
-
             return (
               <div
                 key={key}
@@ -76,7 +73,6 @@ function MapPreview({ map }) {
                       ? "1px solid #cc2a2a"
                       : "none",
                   outlineOffset: "-1px",
-                  position: "relative",
                 }}
               />
             );
@@ -87,7 +83,6 @@ function MapPreview({ map }) {
   );
 }
 
-// ─── Leyenda de tiles ─────────────────────────────────────────────────────────
 function MapLegend({ map }) {
   const present = [...new Set(map.grid.flatMap((r) => [...r]))];
   return (
@@ -166,39 +161,115 @@ function MapLegend({ map }) {
 }
 
 // ─── Card de mapa ─────────────────────────────────────────────────────────────
-function MapCard({ map, onSelect }) {
+function MapCard({ map, onSelect, isUnlocked, completedLevels }) {
   const [hov, setHov] = useState(false);
+  const setCurrentLevel = useGameStore((s) => s.setCurrentLevel); // ← AÑADIR
+  const goToAbilitySelect = useGameStore((s) => s.goToAbilitySelect); // ← AÑADIR
+  const active = hov && isUnlocked;
+  const totalLevels = map.levels?.length ?? 5;
+  const completedCount = (completedLevels ?? -1) + 1; // 0 = ninguno completado
+  const allDone = completedCount >= totalLevels;
 
   return (
     <div
-      onClick={() => onSelect(map.key)}
+      onClick={() => {
+        if (!isUnlocked) return;
+        const completed = completedLevels ?? -1;
+        const totalLevels = map.levels?.length ?? 5;
+        const next = Math.min(completed + 1, totalLevels - 1);
+        setCurrentLevel(next);
+        goToAbilitySelect(map.key);
+      }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         width: "100%",
         padding: "10px 10px 14px",
-        background: hov ? "#161610" : "#111209",
-        border: `1.5px solid ${hov ? "#c9a84c" : "#2a2218"}`,
+        background: active ? "#161610" : "#111209",
+        border: `1.5px solid ${active ? "#c9a84c" : isUnlocked ? "#2a2218" : "#1a1810"}`,
         borderRadius: 5,
-        cursor: "pointer",
+        cursor: isUnlocked ? "pointer" : "default",
         transition: "all 0.18s",
         display: "flex",
         flexDirection: "column",
         boxSizing: "border-box",
-        boxShadow: hov
+        position: "relative",
+        boxShadow: active
           ? "0 0 28px rgba(201,168,76,0.1), 0 8px 24px rgba(0,0,0,0.5)"
           : "0 4px 12px rgba(0,0,0,0.4)",
       }}
     >
+      {!isUnlocked && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 2,
+            borderRadius: 5,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            background: "rgba(13,14,15,0.75)",
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ fontSize: 28, lineHeight: 1 }}>🔒</div>
+          <div
+            style={{
+              fontFamily: "Cinzel, serif",
+              fontSize: 9,
+              letterSpacing: 2,
+              color: "#5a4a3a",
+            }}
+          >
+            BLOQUEADO
+          </div>
+        </div>
+      )}
+
+      {/* Número de orden */}
+      <div
+        style={{
+          fontFamily: "Cinzel, serif",
+          fontSize: 8,
+          letterSpacing: 2,
+          color: isUnlocked ? "#5a4a2a" : "#2a2218",
+          marginBottom: 6,
+        }}
+      >
+        {String(map.order).padStart(2, "0")}
+        {allDone && isUnlocked && (
+          <span
+            style={{
+              marginLeft: 8,
+              fontSize: 7,
+              letterSpacing: 2,
+              padding: "1px 6px",
+              borderRadius: 3,
+              color: "#97C459",
+              background: "#0a180a",
+              border: "1px solid #3B6D11",
+            }}
+          >
+            ✓ COMPLETO
+          </span>
+        )}
+      </div>
+
       {/* Preview */}
       <div
         style={{
           borderRadius: 3,
           overflow: "hidden",
-          border: `1px solid ${hov ? "#3a3220" : "#1a1810"}`,
-          marginBottom: 12,
+          border: `1px solid ${active ? "#3a3220" : "#1a1810"}`,
+          marginBottom: 10,
           width: "100%",
           transition: "border-color 0.18s",
+          // ✅ FIX 3: atenuar visualmente el preview si está bloqueado
+          opacity: isUnlocked ? 1 : 0.35,
+          filter: isUnlocked ? "none" : "grayscale(0.6)",
         }}
       >
         <MapPreview map={map} />
@@ -210,8 +281,8 @@ function MapCard({ map, onSelect }) {
           fontFamily: "Cinzel, serif",
           fontSize: 11,
           letterSpacing: 2,
-          color: hov ? "#e0c060" : "#c9a84c",
-          marginBottom: 6,
+          color: isUnlocked ? (active ? "#e0c060" : "#c9a84c") : "#3a3028",
+          marginBottom: 4,
           transition: "color 0.18s",
         }}
       >
@@ -222,7 +293,7 @@ function MapCard({ map, onSelect }) {
       <div
         style={{
           fontSize: 10,
-          color: "#4a3f2f",
+          color: isUnlocked ? "#4a3f2f" : "#2a2218",
           lineHeight: 1.55,
           marginBottom: 10,
           flexGrow: 1,
@@ -231,40 +302,226 @@ function MapCard({ map, onSelect }) {
         {map.description}
       </div>
 
-      {/* Dimensiones */}
-      <div
-        style={{
-          fontSize: 8,
-          color: "#2a2218",
-          fontFamily: "Cinzel, serif",
-          letterSpacing: 1,
-          marginBottom: 6,
-        }}
-      >
-        {map.w} × {map.h} CASILLAS
-      </div>
+      {/* Progreso de niveles — solo si desbloqueado */}
+      {isUnlocked && map.levels && (
+        <div style={{ marginBottom: 10 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: 8,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "Cinzel, serif",
+                fontSize: 8,
+                letterSpacing: 1,
+                color: "#3a3028",
+              }}
+            >
+              NIVELES
+            </span>
+            <span
+              style={{
+                fontFamily: "Cinzel, serif",
+                fontSize: 8,
+                letterSpacing: 1,
+                color: completedCount > 0 ? "#c9a84c" : "#2a2218",
+              }}
+            >
+              {completedCount}/{totalLevels}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {map.levels.map((lv, i) => {
+              const done = i < completedCount;
+              const isNext = i === completedCount; // primer nivel sin completar
+              const locked = i > completedCount; // aún no alcanzado
+              const isBoss = lv.isBoss;
+
+              return (
+                <div
+                  key={i}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (locked) return;
+                    setCurrentLevel(i);
+                    goToAbilitySelect(map.key);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "5px 8px",
+                    borderRadius: 3,
+                    border: `1px solid ${
+                      done
+                        ? isBoss
+                          ? "#4a1010"
+                          : "#2a3a18"
+                        : isNext
+                          ? isBoss
+                            ? "#7a1818"
+                            : "#3B6D11"
+                          : "#1a1810"
+                    }`,
+                    background: done
+                      ? isBoss
+                        ? "#180808"
+                        : "#0c1408"
+                      : isNext
+                        ? isBoss
+                          ? "#1a0808"
+                          : "#0a1808"
+                        : "#0d0e0a",
+                    cursor: locked ? "default" : "pointer",
+                    opacity: locked ? 0.35 : 1,
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (locked) return;
+                    e.currentTarget.style.borderColor = isBoss
+                      ? "#E24B4A"
+                      : "#c9a84c";
+                    e.currentTarget.style.background = isBoss
+                      ? "#220a0a"
+                      : "#111a08";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (locked) return;
+                    e.currentTarget.style.borderColor = done
+                      ? isBoss
+                        ? "#4a1010"
+                        : "#2a3a18"
+                      : isNext
+                        ? isBoss
+                          ? "#7a1818"
+                          : "#3B6D11"
+                        : "#1a1810";
+                    e.currentTarget.style.background = done
+                      ? isBoss
+                        ? "#180808"
+                        : "#0c1408"
+                      : isNext
+                        ? isBoss
+                          ? "#1a0808"
+                          : "#0a1808"
+                        : "#0d0e0a";
+                  }}
+                >
+                  {/* Indicador de estado */}
+                  <div
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 9,
+                      background: done
+                        ? isBoss
+                          ? "#7a1818"
+                          : "#3B6D11"
+                        : isNext
+                          ? isBoss
+                            ? "#4a1010"
+                            : "#1a3a10"
+                          : "#1a1810",
+                      border: `1px solid ${
+                        done
+                          ? isBoss
+                            ? "#E24B4A"
+                            : "#97C459"
+                          : isNext
+                            ? isBoss
+                              ? "#E24B4A"
+                              : "#5a9a2a"
+                            : "#2a2218"
+                      }`,
+                      color: done
+                        ? isBoss
+                          ? "#E24B4A"
+                          : "#97C459"
+                        : isNext
+                          ? isBoss
+                            ? "#E24B4A"
+                            : "#5a9a2a"
+                          : "#2a2218",
+                    }}
+                  >
+                    {done ? "✓" : isNext ? (isBoss ? "☠" : "▶") : String(i + 1)}
+                  </div>
+
+                  {/* Nombre del nivel */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontFamily: "Cinzel, serif",
+                        fontSize: 9,
+                        letterSpacing: 1,
+                        color: done
+                          ? isBoss
+                            ? "#7a3030"
+                            : "#4a6a2a"
+                          : isNext
+                            ? isBoss
+                              ? "#E24B4A"
+                              : "#97C459"
+                            : "#2a2218",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {isBoss ? "⚠ " : ""}
+                      {lv.name}
+                    </div>
+                  </div>
+
+                  {/* Número de nivel */}
+                  <div
+                    style={{
+                      fontFamily: "Cinzel, serif",
+                      fontSize: 8,
+                      letterSpacing: 1,
+                      color: locked ? "#1a1810" : "#3a3028",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {locked ? "🔒" : `NV ${i + 1}`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <MapLegend map={map} />
 
-      {/* CTA hover */}
+      {/* CTA */}
       <div
         style={{
-          marginTop: 12,
+          marginTop: 10,
           fontSize: 9,
           fontFamily: "Cinzel, serif",
           letterSpacing: 2,
-          color: hov ? "#c9a84c" : "#1e1e18",
+          color: isUnlocked ? (active ? "#c9a84c" : "#1e1e18") : "transparent",
           textAlign: "center",
           transition: "color 0.18s",
         }}
       >
-        {hov ? "SELECCIONAR →" : "···"}
+        {isUnlocked &&
+          (active ? (allDone ? "VOLVER A JUGAR →" : "CONTINUAR →") : "···")}
       </div>
     </div>
   );
 }
 
-// ─── Resumen del escuadrón ────────────────────────────────────────────────────
 function RosterSummary({ roster, compact }) {
   return (
     <div
@@ -332,16 +589,27 @@ function RosterSummary({ roster, compact }) {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function MapSelector() {
-  // Ahora usamos goToAbilitySelect en vez de startMap directamente
   const goToAbilitySelect = useGameStore((s) => s.goToAbilitySelect);
+  const setCurrentLevel = useGameStore((s) => s.setCurrentLevel);
   const backToModeSelect = useGameStore((s) => s.backToModeSelect);
   const roster = useGameStore((s) => s.roster);
+  // ✅ FIX 2: fallback a [] por si progressSlice aún no está conectado
+  const unlockedMaps = useGameStore((s) => s.unlockedMaps) ?? [];
+  const mapLevels = useGameStore((s) => s.mapLevels) ?? {};
 
   const width = useWindowWidth();
   const cols = useCols(width);
   const isXs = width < 480;
   const isSm = width < 768;
-  const maps = Object.values(MAPS);
+  const maps = Object.values(MAPS).sort((a, b) => a.order - b.order);
+
+  const handleSelectMap = (mapKey) => {
+    const completed = mapLevels[mapKey] ?? -1;
+    const totalLevels = MAPS[mapKey]?.levels?.length ?? 5;
+    const next = Math.min(completed + 1, totalLevels - 1);
+    setCurrentLevel(next);
+    goToAbilitySelect(mapKey);
+  };
 
   return (
     <div
@@ -384,7 +652,7 @@ export default function MapSelector() {
         }}
       />
 
-      {/* ── Cabecera ── */}
+      {/* Cabecera */}
       <div
         style={{
           textAlign: "center",
@@ -427,7 +695,6 @@ export default function MapSelector() {
             }}
           />
         </div>
-
         <div
           style={{
             fontFamily: "Cinzel, serif",
@@ -441,7 +708,6 @@ export default function MapSelector() {
         >
           CAMPO DE BATALLA
         </div>
-
         <div
           style={{
             fontFamily: "Crimson Text, serif",
@@ -454,13 +720,12 @@ export default function MapSelector() {
         >
           Elige el terreno donde luchará tu escuadrón
         </div>
-
         <div style={{ display: "flex", justifyContent: "center" }}>
           <RosterSummary roster={roster} compact={isXs} />
         </div>
       </div>
 
-      {/* ── Grid de mapas ── */}
+      {/* Grid de mapas */}
       <div
         style={{
           display: "grid",
@@ -470,9 +735,18 @@ export default function MapSelector() {
           maxWidth: cols === 3 ? 900 : cols === 2 ? 620 : 360,
         }}
       >
-        {maps.map((map) => (
-          <MapCard key={map.key} map={map} onSelect={goToAbilitySelect} />
-        ))}
+        {maps.map((map) => {
+          const isUnlocked = unlockedMaps.includes(map.key);
+          return (
+            <MapCard
+              key={map.key}
+              map={map}
+              isUnlocked={isUnlocked}
+              completedLevels={mapLevels[map.key] ?? -1}
+              onSelect={handleSelectMap}
+            />
+          );
+        })}
       </div>
 
       <div
@@ -489,7 +763,7 @@ export default function MapSelector() {
         HAZ CLIC EN UN MAPA PARA ELEGIR TUS HABILIDADES
       </div>
 
-      {/* ── Botón volver — fixed bottom-left ── */}
+      {/* Botón volver */}
       <button
         onClick={backToModeSelect}
         style={{

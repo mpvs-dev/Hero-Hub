@@ -1,10 +1,4 @@
-/**
- * enemySlice.js
- * Turno del enemigo: aplicar movimientos, ataques y fin de turno con ticks.
- * La IA en sí vive en gameEngine.js — este slice solo aplica sus decisiones.
- */
-
-import { MAPS }      from "../config/maps";
+import { MAPS } from "../config/maps";
 import { ABILITIES } from "../config/abilities";
 import {
   calculateDamage,
@@ -23,6 +17,7 @@ import {
   msgLavaDamage, msgLavaTransit, msgLavaDeath,
   msgHeal, msgTurn,
 } from "../config/logColors";
+import { STATUS_ICON_LABELS } from "../config/constants";
 
 export const enemyState = {
   enemyBusy: false,
@@ -61,13 +56,13 @@ export function createEnemySlice(set, get) {
 
     applyEnemyAttack: (enemyId, targetId) => {
       const { units } = get();
-      const enemy  = units.find(u => u.id === enemyId);
+      const enemy = units.find(u => u.id === enemyId);
       const target = units.find(u => u.id === targetId);
       if (!enemy || !target || !target.alive) return null;
 
-      const dmg   = calculateDamage(enemy, target);
+      const dmg = calculateDamage(enemy, target);
       const newHp = Math.max(0, target.hp - dmg);
-      const died  = newHp <= 0;
+      const died = newHp <= 0;
 
       // Intentar aplicar efecto de estado
       const statusResult = !died ? tryApplyStatusEffect(enemy, target) : null;
@@ -82,32 +77,31 @@ export function createEnemySlice(set, get) {
           );
         } else {
           newEffects.push({
-            type:     statusResult.type,
+            type: statusResult.type,
             duration: statusResult.duration,
-            damage:   statusResult.damage,
+            damage: statusResult.damage,
           });
         }
       }
 
       // Log con tokens
-      const STATUS_ICONS = { poison: "☠ Envenenado", burn: "🔥 Quemado", bleed: "🩸 Sangrando" };
       const statusName = (!died && statusResult && !statusResult.refresh)
-        ? (STATUS_ICONS[statusResult.type] ?? statusResult.type)
+        ? (STATUS_ICON_LABELS[statusResult.type] ?? statusResult.type)
         : null;
 
       get()._log(msgAttack({
         attackerName: enemy.name,
         attackerTeam: enemy.team,
-        targetName:   target.name,
-        targetTeam:   target.team,
-        damage:       dmg,
+        targetName: target.name,
+        targetTeam: target.team,
+        damage: dmg,
         died,
         statusName,
       }));
 
       const newUnits = units.map(u => {
         if (u.id === targetId) return { ...u, hp: newHp, alive: !died, statusEffects: newEffects };
-        if (u.id === enemyId)  return { ...u, attacked: true };
+        if (u.id === enemyId) return { ...u, attacked: true };
         return u;
       });
       set({ units: newUnits });
@@ -117,16 +111,16 @@ export function createEnemySlice(set, get) {
 
     finishEnemyTurn: () => {
       const { roundNumber, units, currentMapKey } = get();
-      const map      = MAPS[currentMapKey];
+      const map = MAPS[currentMapKey];
       const newRound = roundNumber + 1;
-      const allLogs  = [];
+      const allLogs = [];
 
       // 1. Tick efectos de estado + lava en TODAS las unidades
       let processed = units.map(u => {
         if (!u.alive) return u;
         const { unit: afterStatus, logs: sLogs } = tickStatusEffects(u);
         allLogs.push(...sLogs);
-        const { unit: afterTile,   logs: tLogs } = tickTileEffects(afterStatus, map.grid);
+        const { unit: afterTile, logs: tLogs } = tickTileEffects(afterStatus, map.grid);
         allLogs.push(...tLogs);
         return afterTile;
       });
@@ -149,17 +143,17 @@ export function createEnemySlice(set, get) {
       // 3. Resetear flags de acción para el siguiente turno
       processed = processed.map(u => ({
         ...u,
-        movesUsed:      0,
-        attacked:       false,
-        abilityUsed:    false,
+        movesUsed: 0,
+        attacked: false,
+        abilityUsed: false,
         abilityCooldown: Math.max(0, (u.abilityCooldown ?? 0) - 1),
       }));
 
       set({
-        units:       processed,
-        turn:        "player",
+        units: processed,
+        turn: "player",
         roundNumber: newRound,
-        enemyBusy:   false,
+        enemyBusy: false,
         ...(gameOverResult ? { gameOver: gameOverResult } : {}),
       });
 
